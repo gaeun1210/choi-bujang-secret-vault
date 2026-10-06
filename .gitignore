@@ -4,3 +4,6 @@ bundle-notes.json
 .env.*
 node_modules/
 public/aleph.json
+
+# 2단계: 가상 메모 문장이 든 SQL은 Git에 올리지 않음 (Supabase SQL Editor에 직접 붙여 넣기)
+*.local.sql
