@@ -35,10 +35,10 @@
 </head>
 <body>
   <main>
-    <div class="eyebrow">BYTE BACK · 3단계 진짜 로그인</div>
+    <div class="eyebrow">BYTE BACK · 4단계 내 자료만</div>
     <h1>점령된 자료실</h1>
-    <p>메모는 서버 함수(<code>/api/notes</code>)가 로그인 토큰을 확인한 뒤에만 돌려줍니다. 아래 기록은 모두 실습을 위해 만든 가상 자료입니다.</p>
-    <div class="notice">남은 약점: 로그인은 "누구인지" 확인할 뿐입니다. 아직 소유자 검사가 없어서, 로그인한 다른 계정이 메모 id를 알면 읽고 고칠 수 있습니다. 4단계에서 막습니다.</div>
+    <p>메모는 서버 함수(<code>/api/notes</code>)가 로그인 토큰을 확인하고, 요청한 사람이 그 메모의 주인일 때만 돌려줍니다. 아래 기록은 모두 실습을 위해 만든 가상 자료입니다.</p>
+    <div class="notice">4단계: 로그인한 다른 계정이 메모 번호를 알아내 바꿔 요청해도, 주인이 아니면 "메모가 없습니다"로 거부됩니다. 소유자를 바꾸는 수정도 거부됩니다.</div>
 
     <section class="panel" id="login-panel">
       <h2 style="margin-top:0">로그인</h2>

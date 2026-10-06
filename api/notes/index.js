@@ -1,6 +1,7 @@
 // GET /api/notes  → 로그인 사용자의 가상 메모 배열 [{id,title,body}]
 // POST /api/notes → {id?,title,body} 추가, owner_id는 서버가 확인한 사용자 ID. 201 {id}
-import { cleanNote, dbFailure, newNoteId, notes, readBody, requireUser, send } from '../../src/notes-api.mjs';
+// 본문에 다른 사람의 owner_id·userId를 넣으면 403으로 거부합니다.
+import { cleanNote, dbFailure, newNoteId, notes, ownerMismatch, readBody, requireUser, send } from '../../src/notes-api.mjs';
 
 export default async function handler(request, response) {
   const method = request.method ?? 'GET';
@@ -16,6 +17,9 @@ export default async function handler(request, response) {
 
     const input = readBody(request);
     if (!input) return send(response, 400, { error: 'INVALID_JSON', message: 'JSON 객체를 보내 주세요.' });
+    if (ownerMismatch(input, userId)) {
+      return send(response, 403, { error: 'OWNER_MISMATCH', message: '다른 사람 이름으로 메모를 만들 수 없습니다.' });
+    }
     const id = newNoteId(input);
     if (id.error) return send(response, 400, { error: 'INVALID_ID', message: id.error });
     const note = cleanNote(input);
