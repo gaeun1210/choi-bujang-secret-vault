@@ -89,8 +89,87 @@ async function stepTwoChecks(config) {
   return results;
 }
 
+async function errorJson(response) {
+  try {
+    const data = await response.json();
+    return typeof data?.error === 'string' ? data.error : null;
+  } catch {
+    return null;
+  }
+}
+
+function denial(response) {
+  return async () => {
+    if (!response) return '미실행: 배포 주소에 요청하지 못함';
+    const code = [401, 403].includes(response.status) ? await errorJson(response) : null;
+    return `HTTP ${response.status} · ${code ? `JSON 오류 ${code}` : 'JSON 오류 문구 없음'}`;
+  };
+}
+
+async function stepThreeChecks(config) {
+  const app = appUrl(config);
+  const fakeUser = '00000000-0000-4000-8000-000000000000';
+  const results = [];
+
+  const anonymous = await tryFetch(new URL('/api/notes', app));
+  results.push({ attackId: 'anonymous_note_list', expected: '로그인 없이 메모 목록 요청 시 401/403 JSON 오류',
+    observed: await denial(anonymous)() });
+
+  let forgedId = null;
+  try {
+    const response = await fetch(new URL(`/api/notes?userId=${fakeUser}&role=admin`, app), {
+      headers: { 'X-User-Id': fakeUser, 'X-Role': 'admin' }, redirect: 'error', signal: AbortSignal.timeout(10000),
+    });
+    forgedId = response.headers.has('x-vercel-id') ? response : null;
+  } catch { /* 미실행 */ }
+  results.push({ attackId: 'forged_user_id_no_token', expected: '토큰 없이 userId·role만 보내면 401/403 거부',
+    observed: await denial(forgedId)() });
+
+  let forgedToken = null;
+  try {
+    const unsigned = `${Buffer.from('{"alg":"none","typ":"JWT"}').toString('base64url')}.${Buffer.from(JSON.stringify({
+      iss: config.identityProvider?.issuer, aud: 'authenticated', role: 'authenticated', sub: fakeUser,
+      exp: Math.floor(Date.now() / 1000) + 300 })).toString('base64url')}.unsigned`;
+    const response = await fetch(new URL('/api/notes', app), {
+      headers: { Authorization: `Bearer ${unsigned}` }, redirect: 'error', signal: AbortSignal.timeout(10000),
+    });
+    forgedToken = response.headers.has('x-vercel-id') ? response : null;
+  } catch { /* 미실행 */ }
+  results.push({ attackId: 'forged_unsigned_token', expected: '서명 없는 가짜 토큰은 401/403 거부',
+    observed: await denial(forgedToken)() });
+
+  let anonymousWrite = null;
+  try {
+    const response = await fetch(new URL('/api/notes', app), {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title: '무로그인 시도', body: '거부되어야 함' }),
+      redirect: 'error', signal: AbortSignal.timeout(10000),
+    });
+    anonymousWrite = response.headers.has('x-vercel-id') ? response : null;
+  } catch { /* 미실행 */ }
+  results.push({ attackId: 'anonymous_note_create', expected: '로그인 없이 메모 추가 시 401/403 거부',
+    observed: await denial(anonymousWrite)() });
+
+  const staticFile = await tryFetch(new URL('/data.json', app));
+  results.push({ attackId: 'static_note_file_read', expected: '/data.json 요청 시 404',
+    observed: !staticFile ? '미실행: 배포 주소에 요청하지 못함' : `HTTP ${staticFile.status}` });
+
+  const home = await tryFetch(new URL('/', app));
+  results.push({ attackId: 'security_header_nosniff', expected: '첫 화면 응답에 X-Content-Type-Options: nosniff',
+    observed: !home ? '미실행: 배포 주소에 요청하지 못함'
+      : `HTTP ${home.status} · nosniff ${home.headers.get('x-content-type-options')?.toLowerCase() === 'nosniff' ? '있음' : '없음'}` });
+
+  // 정상 A 로그인 추가·수정·삭제는 비밀번호를 코드에 넣지 않기 위해 자동 점검하지 않습니다.
+  results.push({ attackId: 'login_a_crud', expected: '정상 A 로그인 뒤 가상 메모 추가·수정·삭제 성공',
+    observed: '미실행: 비밀번호를 코드에 넣지 않으므로 학생이 화면에서 직접 확인' });
+  results.push({ attackId: 'login_b_reads_a_note', expected: '4단계에서 기록 (아직 소유자 검사 없음)',
+    observed: '미실행: 4단계에서 B 계정으로 점검 예정' });
+  return results;
+}
+
 export async function runAttackChecks(config) {
   if (config.step === 1) return stepOneChecks(config);
   if (config.step === 2) return stepTwoChecks(config);
+  if (config.step === 3) return stepThreeChecks(config);
   throw new Error('이 단계의 공격 점검을 src/attack-check.mjs에 구현해 주세요.');
 }
