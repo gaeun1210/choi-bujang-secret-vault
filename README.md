@@ -9,15 +9,16 @@
 | 1단계 | `0ff36ed` Initial commit | Vercel 시작 틀 배포. `/data.json`과 공개 저장소의 `data.json`에 가상 메모 네 건이 그대로 공개된 상태를 확인 |
 | 2단계 | `a9cd08a` 「2단계 저장점」 | 메모를 정적 파일·코드에서 빼서 학습용 Supabase 테이블로 옮기고, 서버 함수 `/api/notes`가 읽게 바꿈 |
 | 3단계 | `b2797a4` 「3단계 저장점」 | Supabase Auth 이메일·비밀번호 로그인·로그아웃, 서버의 토큰 검사(`src/verify-login.mjs`), 로그인 사용자의 가상 메모 추가·수정·삭제 API |
-| 4단계 | 「4단계 저장점」 | API가 확인된 사용자 ID와 DB `owner_id`를 비교해 읽기·추가·수정·삭제를 본인 메모로 제한, B 시험 메모 SQL, 메모 테이블 RLS·최소 권한 SQL 제안 |
+| 4단계 | `cc06beb` 「4단계 저장점」 | API가 확인된 사용자 ID와 DB `owner_id`를 비교해 읽기·추가·수정·삭제를 본인 메모로 제한, B 시험 메모 SQL, 메모 테이블 RLS·최소 권한 SQL 제안 |
+| 5단계 | 「5단계 저장점」 | 로그인·로그아웃도 서버 함수로 옮겨 화면 코드에서 Supabase 주소·공개 키·SDK 제거, 메모 테이블의 PUBLIC·anon·authenticated 직접 권한 회수 SQL, `originalApiUrl` 기록 |
 
-## 현재 작동하는 기능 (4단계)
+## 현재 작동하는 기능 (5단계)
 
-1. `/` 화면에서 Supabase Auth 공식 SDK로 이메일·비밀번호 로그인·로그아웃을 합니다(3단계와 같음). 화면 코드에는 공개용 Project URL과 publishable key만 있습니다.
-2. 자료 API는 `src/verify-login.mjs`로 토큰을 검사해, 없거나 틀리면 **401 JSON 오류**(`LOGIN_REQUIRED`)를 돌려줍니다.
-3. **소유자 검사:** 모든 DB 요청에 `owner_id = 확인된 사용자 ID` 조건을 붙이고, 돌려받은 행의 주인도 다시 확인합니다. 남의 메모 id로 읽기·수정·삭제하면 존재 여부를 알리지 않도록 `404 NOT_FOUND`로 거부합니다.
-4. URL·본문의 `owner_id`·`userId`는 믿지 않습니다. 추가할 때는 확인된 ID로 저장하고, 본문에 다른 소유자를 넣으면 추가는 `403 OWNER_MISMATCH`, 수정은 `403 OWNER_CHANGE_FORBIDDEN`으로 거부합니다. 수정은 소유자 칸을 아예 바꾸지 않아 기존 행·새 행 모두 본인 소유입니다.
-5. `/data.json` 404, `/aleph.json` 자동 생성, `nosniff` 등 보안 헤더, 서버 전용 키는 Vercel 환경변수에만 있음(앞 단계와 같음).
+1. **브라우저는 이 사이트의 서버 함수만 부릅니다.** 로그인 `POST /api/auth/login`, 로그아웃 `POST /api/auth/logout`, 메모 `/api/notes…`. 화면 코드에는 Supabase 주소·공개 키(`sb_publishable_…`)·SDK가 없습니다. (점검: 브라우저 메모 자료 직접 호출은 4단계 때도 **없음**이었고, 로그인 직접 호출만 이번에 서버로 옮김)
+2. 로그인 서버 함수는 공식 SDK(`supabase-js`의 `signInWithPassword`)로 Supabase Auth를 부르고 access token만 돌려줍니다(refresh token은 주지 않음, 만료되면 다시 로그인). 실패 이유는 화면에 보여 줍니다. 토큰은 그 탭의 `sessionStorage`에만 둡니다.
+3. 자료 API는 `src/verify-login.mjs`로 토큰을 검사(없거나 틀리면 401 JSON)하고, 확인된 사용자 ID와 DB `owner_id`를 비교해 본인 메모만 읽기·추가·수정·삭제합니다(남의 메모 404, 소유자 변경 403 — 4단계와 같음).
+4. 학습 DB의 메모 테이블은 `step5-revoke.sql`로 PUBLIC·anon·authenticated 직접 권한을 모두 회수합니다. 원본 자료 주소(`originalApiUrl`)를 공개 키로 직접 불러도 메모를 받을 수 없고, 서버 전용 키(service_role)를 가진 서버 함수만 접근합니다.
+5. `/data.json` 404, `/aleph.json` 자동 생성(이제 `allowedRoutes`·`originalApiUrl` 포함), 모든 응답에 `nosniff` 등 보안 헤더.
 
 ### 자료 API (`aleph.config.json`의 `allowedRoutes`)
 
@@ -29,6 +30,8 @@
 | `PUT /api/notes/:id` | 본인 메모 `{title,body}` 수정 | `200 {id,title,body}` · 남의 것이면 `404`, 소유자 변경 시도면 `403` |
 | `DELETE /api/notes/:id` | 본인 메모 삭제 | `200 {id,deleted:true}` · 없거나 남의 것이면 `404` |
 
+로그인 경로(자료 API 아님): `POST /api/auth/login` `{email,password}` → `200 {accessToken,expiresAt,email}` 또는 `401 {error:"LOGIN_FAILED",message}` · `POST /api/auth/logout` (Bearer 토큰) → `200 {loggedOut:true}`.
+
 모든 경로는 로그인 토큰이 없거나 틀리면 `401 {"error":"LOGIN_REQUIRED","message":…}`입니다. 검사에 쓴 발급자 정보(비밀 키 제외)는 `aleph.config.json`의 `identityProvider`에 있습니다.
 
 ## 다시 실행하는 방법
@@ -38,15 +41,16 @@
 3. **DB 보강 (3단계, 한 번):** `supabase/step3-auth.sql`에서 A 계정 이메일 자리를 바꾼 뒤 SQL Editor에서 Run. 메모 UUID 칸(`note_id`)을 만들고 기존 가상 메모 4건을 A 계정 것으로 표시합니다.
 4. **소유자·B 시험 메모 (4단계, 한 번):** `supabase/step4-owners.sql`의 A·B 이메일 자리를 바꿔 Run. 마지막 표에서 A는 기존 메모 수, B는 시험 메모 1건, 주인 없음 0이면 정상입니다.
 5. **RLS·최소 권한 (4단계, 검토 후 한 번):** `supabase/step4-rls.sql`의 [가] 적용 전 기록 → [나] 적용 → [다] 적용 후 대조를 블록별로 Run. [다]에서 `has_privilege`가 `expected`와 모두 같아야 합니다(anon 전부 false, authenticated는 SELECT·INSERT·UPDATE·DELETE만 true).
-6. **환경변수 (2단계에서 넣은 그대로):** Vercel의 `SUPABASE_URL`, `SUPABASE_SECRET_KEY`. 값은 Vercel 설정 화면에만 넣습니다.
-7. **로컬 빌드 확인:** `npm run build -- --local`
-8. **제출 묶음:** `npm run bundle` (커밋된 상태에서만 동작, `bundle-notes.json` 필요. `bundle-notes.json`, `artifacts/submission.json`은 커밋하지 않음)
+6. **직접 권한 회수 (5단계, 검토 후 한 번):** `supabase/step5-revoke.sql`의 [가] 적용 전 → [나] 회수 → [다] 적용 후를 하나씩 Run. [다]에서 anon·authenticated 14줄이 모두 false면 정상입니다.
+7. **환경변수 (2단계에서 넣은 그대로):** Vercel의 `SUPABASE_URL`, `SUPABASE_SECRET_KEY`. 값은 Vercel 설정 화면에만 넣습니다.
+8. **로컬 빌드 확인:** `npm run build -- --local`
+9. **제출 묶음:** `npm run bundle` (커밋된 상태에서만 동작, `bundle-notes.json` 필요. `bundle-notes.json`, `artifacts/submission.json`은 커밋하지 않음)
 
-## 방어 구조와 남은 한계 (4단계)
+## 방어 구조와 남은 한계 (5단계)
 
-- **1차 방어 — 앱 API:** 서버 함수는 서버 전용 키(service_role)로 DB에 접근하므로 RLS를 거치지 않습니다. 그래서 소유자 검사는 API 코드가 책임집니다(위 3·4번).
-- **2차 방어 — DB의 RLS·GRANT:** `step4-rls.sql`은 `anon` 권한을 모두 회수하고, `authenticated`에는 네 권한만 주되 SELECT·DELETE는 `USING`, INSERT는 `WITH CHECK`, UPDATE는 `USING`+`WITH CHECK`로 모두 `auth.uid() = owner_id`일 때만 허용합니다. Data API를 직접 부르는 경로에 대한 대비이며, 심판은 anon 키 직접 접근만 확인합니다.
-- **남은 한계:** 서버 전용 키가 새면 RLS를 우회할 수 있으므로 키는 Vercel 환경변수에만 둡니다. 심판 계정(A/B)의 사용자 ID는 Supabase `auth.users`에 없을 수 있어 `owner_id`에 외래키를 걸지 않았습니다.
+- **한 곳으로 모음:** 자료 요청은 브라우저 → Vercel 서버 함수 → Supabase 한 길뿐입니다. 서버 함수가 로그인(토큰 검사)과 소유자 검사를 모두 맡습니다.
+- **원본 잠금:** 메모 테이블에 PUBLIC·anon·authenticated 권한이 없으므로, 앱 코드에서 주소와 공개 키를 알아내도 Data API로 메모를 읽거나 고칠 수 없습니다. 4단계의 RLS 정책 4개는 실수로 권한이 다시 열릴 때를 대비한 안전장치로 남겨 둡니다.
+- **남은 한계:** 서버 전용 키가 새면 모든 방어를 우회하므로 키는 Vercel 환경변수에만 둡니다. 로그인 시도 횟수 제한은 Supabase Auth 기본 제한에 맡깁니다. access token은 탭의 `sessionStorage`에 있으므로 화면에 스크립트 삽입(XSS)이 생기면 토큰이 샐 수 있습니다(화면은 `textContent`만 써서 막아 둠).
 
 ## 메모가 남아 있는지 검색하는 확인 절차
 
@@ -65,7 +69,8 @@ APP=https://choi-bujang-secret-vault-nine.vercel.app
    - `curl -sI $APP/ | grep -i x-content-type-options` → `nosniff`
 3. **자료 API (3단계):** `curl -s -i $APP/api/notes` → `HTTP/2 401`과 `{"error":"LOGIN_REQUIRED",…}`. 메모 문장이 나오면 안 됩니다.
 4. **로그인·소유자 확인 (3~4단계):** 시크릿 창에서 `$APP`을 열면 로그인 칸만 보이고 메모가 없어야 합니다. A로 로그인하면 A 메모만 보이고 추가·수정·삭제가 되며, 로그아웃하면 다시 로그인 칸만 보입니다. B로 로그인하면 B 시험 메모만 보이고 A 메모는 보이지 않습니다.
-   - **공개 키로 DB 직접 읽기 (anon):** `curl -s "https://jrvzvsynynerietoqkcy.supabase.co/rest/v1/vault_notes?select=*" -H "apikey: <publishable key>"` → 권한 오류(`permission denied`) 또는 빈 배열이어야 합니다.
+   - **공개 키로 원본 직접 읽기 (anon):** `curl -s "https://jrvzvsynynerietoqkcy.supabase.co/rest/v1/vault_notes" -H "apikey: <publishable key>"` → `permission denied` 오류여야 합니다(5단계 회수 SQL 적용 후).
+   - **화면 코드에 키 없음 (5단계):** `curl -s $APP/ | grep -cE "sb_publishable_|supabase\.co"` → `0`
 5. **브라우저에 서버 전용 키가 없는지:** `curl -s $APP/ | grep -c sb_secret_` → `0` (`sb_publishable_` 공개 키는 있어도 됩니다).
 
 ### 확인 기록
@@ -80,6 +85,9 @@ APP=https://choi-bujang-secret-vault-nine.vercel.app
 | B가 A 메모 id로 접근 (3단계) | 막지 않았음 → 4단계에서 차단 |
 | B가 A 메모 id로 읽기·수정·삭제 (4단계) | 로컬 시험에서 404 거부, 배포 후 B 창에서 직접 확인 |
 | 수정 본문으로 소유자 변경 (4단계) | 로컬 시험에서 403 거부 |
+| 브라우저의 메모 자료 직접 호출 (5단계 점검) | 없음 (로그인 직접 호출만 서버로 옮김) |
+| 화면 코드의 Supabase 주소·공개 키 (5단계) | 없음, 헤드리스 브라우저 시험에서 외부 요청 0건 |
+| 원본 주소를 공개 키로 직접 읽기 (5단계) | 회수 SQL 적용 후 학생이 확인, 심판이 anon 키로 재확인 |
 
 ## 과거 노출은 해소되지 않았습니다
 

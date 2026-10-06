@@ -155,9 +155,28 @@ async function stepThreeChecks(config) {
     observed: !staticFile ? '미실행: 배포 주소에 요청하지 못함' : `HTTP ${staticFile.status}` });
 
   const home = await tryFetch(new URL('/', app));
+  const homeText = home && config.step >= 5 ? await home.clone().text().catch(() => null) : null;
   results.push({ attackId: 'security_header_nosniff', expected: '첫 화면 응답에 X-Content-Type-Options: nosniff',
     observed: !home ? '미실행: 배포 주소에 요청하지 못함'
       : `HTTP ${home.status} · nosniff ${home.headers.get('x-content-type-options')?.toLowerCase() === 'nosniff' ? '있음' : '없음'}` });
+
+  if (config.step >= 5) {
+    results.push({ attackId: 'page_has_no_storage_key', expected: '첫 화면 코드에 Supabase 주소·공개 키 없음',
+      observed: homeText === null ? '미실행: 배포 주소에 요청하지 못함'
+        : /sb_publishable_|supabase\.co|eyJhbGci/u.test(homeText) ? '첫 화면 코드에 저장소 주소 또는 키가 보임' : '첫 화면 코드에 저장소 주소·키 없음' });
+
+    // 원본 자료 주소를 키 없이 직접 부르기 (공개 키로 부르는 확인은 심판이 함)
+    let original = null;
+    try {
+      const response = await fetch(config.originalApiUrl, { redirect: 'error', signal: AbortSignal.timeout(10000) });
+      original = response.headers.has('x-deny-reason') ? null : response;
+    } catch { /* 미실행 */ }
+    let rows = null;
+    if (original?.ok) rows = await original.json().then(data => (Array.isArray(data) ? data.length : 0), () => 0);
+    results.push({ attackId: 'original_api_direct_read', expected: '원본 자료 주소를 직접 부르면 거부되거나 메모 0건',
+      observed: !original ? '미실행: 원본 자료 주소에 요청하지 못함'
+        : `HTTP ${original.status} · 메모 ${rows ?? 0}건` });
+  }
 
   // 로그인이 필요한 점검은 비밀번호를 코드에 넣지 않기 위해 자동으로 보내지 않습니다.
   results.push({ attackId: 'login_a_crud', expected: '정상 A 로그인 뒤 자기 가상 메모 추가·수정·삭제 성공',
@@ -177,6 +196,6 @@ async function stepThreeChecks(config) {
 export async function runAttackChecks(config) {
   if (config.step === 1) return stepOneChecks(config);
   if (config.step === 2) return stepTwoChecks(config);
-  if (config.step === 3 || config.step === 4) return stepThreeChecks(config);
+  if (config.step >= 3 && config.step <= 5) return stepThreeChecks(config);
   throw new Error('이 단계의 공격 점검을 src/attack-check.mjs에 구현해 주세요.');
 }

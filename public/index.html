@@ -35,10 +35,10 @@
 </head>
 <body>
   <main>
-    <div class="eyebrow">BYTE BACK · 4단계 내 자료만</div>
+    <div class="eyebrow">BYTE BACK · 5단계 서버 한곳으로</div>
     <h1>점령된 자료실</h1>
     <p>메모는 서버 함수(<code>/api/notes</code>)가 로그인 토큰을 확인하고, 요청한 사람이 그 메모의 주인일 때만 돌려줍니다. 아래 기록은 모두 실습을 위해 만든 가상 자료입니다.</p>
-    <div class="notice">4단계: 로그인한 다른 계정이 메모 번호를 알아내 바꿔 요청해도, 주인이 아니면 "메모가 없습니다"로 거부됩니다. 소유자를 바꾸는 수정도 거부됩니다.</div>
+    <div class="notice">5단계: 이 화면은 자료 저장소를 직접 부르지 않습니다. 로그인과 메모 요청은 모두 이 사이트의 서버 함수를 거치고, 서버가 로그인과 메모 주인을 확인합니다.</div>
 
     <section class="panel" id="login-panel">
       <h2 style="margin-top:0">로그인</h2>
@@ -75,13 +75,9 @@
   </main>
 
   <script type="module">
-    import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/+esm';
-
-    // 둘 다 공개용 값입니다. 서버 전용 키(sb_secret_)는 절대 이 파일에 넣지 않습니다.
-    const SUPABASE_URL = 'https://jrvzvsynynerietoqkcy.supabase.co';
-    const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_v0fYzGLtVopC3KFOEN9RMg_hymwmC6k';
-
-    const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
+    // 5단계: 이 화면은 자료 저장소(Supabase) 주소·키를 모릅니다.
+    // 로그인·로그아웃·메모 요청은 모두 같은 사이트의 서버 함수(/api/…)로만 보냅니다.
+    const SESSION_KEY = 'byteback.session';
     const $ = selector => document.querySelector(selector);
     const loginPanel = $('#login-panel');
     const sessionPanel = $('#session-panel');
@@ -92,18 +88,32 @@
     let session = null;
     let editingId = null;
 
-    const LOGIN_REASONS = {
-      invalid_credentials: '이메일 또는 비밀번호가 맞지 않습니다.',
-      email_not_confirmed: '이메일 인증이 끝나지 않은 계정입니다.',
-      over_request_rate_limit: '시도가 너무 많습니다. 잠시 뒤 다시 해 주세요.',
-      user_banned: '사용이 막힌 계정입니다.',
-    };
+    function saveSession(value) {
+      try {
+        if (value) sessionStorage.setItem(SESSION_KEY, JSON.stringify(value));
+        else sessionStorage.removeItem(SESSION_KEY);
+      } catch { /* 저장소를 못 쓰면 이 탭의 메모리에서만 유지 */ }
+    }
+
+    function loadSession() {
+      try {
+        const value = JSON.parse(sessionStorage.getItem(SESSION_KEY) ?? 'null');
+        if (value?.access_token && (!value.expires_at || value.expires_at * 1000 > Date.now())) return value;
+      } catch { /* 무시 */ }
+      return null;
+    }
 
     async function api(path, options = {}) {
       const headers = { Accept: 'application/json', ...(options.body ? { 'Content-Type': 'application/json' } : {}) };
       if (session?.access_token) headers.Authorization = `Bearer ${session.access_token}`;
       const response = await fetch(path, { ...options, headers, cache: 'no-store' });
       const data = await response.json().catch(() => null);
+      if (response.status === 401 && session) {
+        // 토큰이 만료되었거나 거부됨 → 로그인 화면으로
+        saveSession(null);
+        render(null);
+        throw new Error('로그인이 끝났습니다. 다시 로그인해 주세요.');
+      }
       if (!response.ok) throw new Error(data?.message ?? `요청 실패 (HTTP ${response.status})`);
       return data;
     }
@@ -177,7 +187,7 @@
       notesSection.hidden = !signedIn;
       guestStatus.hidden = signedIn;
       if (signedIn) {
-        $('#session-status').textContent = `${session.user.email ?? '로그인한 사용자'} 계정으로 로그인했습니다.`;
+        $('#session-status').textContent = `${session.email ?? '로그인한 사용자'} 계정으로 로그인했습니다.`;
         loadNotes();
       } else {
         list.replaceChildren();
@@ -191,23 +201,36 @@
       const button = form.querySelector('button');
       $('#login-error').textContent = '';
       button.disabled = true;
-      const { error } = await supabase.auth.signInWithPassword({
-        email: form.email.value.trim(),
-        password: form.password.value,
-      });
-      button.disabled = false;
-      if (error) {
-        const reason = LOGIN_REASONS[error.code] ?? error.message;
-        $('#login-error').textContent = `로그인 실패: ${reason}`;
-        return;
+      try {
+        const response = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+          body: JSON.stringify({ email: form.email.value.trim(), password: form.password.value }),
+          cache: 'no-store',
+        });
+        const data = await response.json().catch(() => null);
+        if (!response.ok || !data?.accessToken) {
+          $('#login-error').textContent = `로그인 실패: ${data?.message ?? `HTTP ${response.status}`}`;
+          return;
+        }
+        const next = { access_token: data.accessToken, expires_at: data.expiresAt, email: data.email };
+        saveSession(next);
+        form.reset();
+        render(next);
+      } catch {
+        $('#login-error').textContent = '로그인 실패: 서버에 연결하지 못했습니다.';
+      } finally {
+        button.disabled = false;
       }
-      form.reset();
     });
 
     $('#logout').addEventListener('click', async () => {
-      const { error } = await supabase.auth.signOut();
-      if (error) {
-        $('#session-status').textContent = `로그아웃 실패: ${error.message}`;
+      const token = session?.access_token;
+      saveSession(null);
+      render(null);
+      if (token) {
+        // 화면은 바로 로그아웃하고, 서버에 세션 종료를 알립니다.
+        fetch('/api/auth/logout', { method: 'POST', headers: { Authorization: `Bearer ${token}` } }).catch(() => {});
       }
     });
 
@@ -234,14 +257,7 @@
       }
     });
 
-    supabase.auth.onAuthStateChange((_event, nextSession) => {
-      // 같은 사용자의 토큰 갱신이면 화면을 다시 그리지 않고 토큰만 바꿉니다.
-      if (session && nextSession && session.user.id === nextSession.user.id) {
-        session = nextSession;
-        return;
-      }
-      render(nextSession);
-    });
+    render(loadSession());
   </script>
 </body>
 </html>
