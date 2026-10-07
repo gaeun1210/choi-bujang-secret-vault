@@ -10,7 +10,8 @@
 | 2단계 | `a9cd08a` 「2단계 저장점」 | 메모를 정적 파일·코드에서 빼서 학습용 Supabase 테이블로 옮기고, 서버 함수 `/api/notes`가 읽게 바꿈 |
 | 3단계 | `b2797a4` 「3단계 저장점」 | Supabase Auth 이메일·비밀번호 로그인·로그아웃, 서버의 토큰 검사(`src/verify-login.mjs`), 로그인 사용자의 가상 메모 추가·수정·삭제 API |
 | 4단계 | `cc06beb` 「4단계 저장점」 | API가 확인된 사용자 ID와 DB `owner_id`를 비교해 읽기·추가·수정·삭제를 본인 메모로 제한, B 시험 메모 SQL, 메모 테이블 RLS·최소 권한 SQL 제안 |
-| 5단계 | 「5단계 저장점」 | 로그인·로그아웃도 서버 함수로 옮겨 화면 코드에서 Supabase 주소·공개 키·SDK 제거, 메모 테이블의 PUBLIC·anon·authenticated 직접 권한 회수 SQL, `originalApiUrl` 기록 |
+| 5단계 | `d323be8` 「5단계 저장점」 | 로그인·로그아웃도 서버 함수로 옮겨 화면 코드에서 Supabase 주소·공개 키·SDK 제거, 메모 테이블의 PUBLIC·anon·authenticated 직접 권한 회수 SQL, `originalApiUrl` 기록 |
+| 보너스 xdr-01 | 「보너스 xdr-01 저장점」 | 무차별 로그인 공격 탐지(T1110): 경보 읽기·패턴·판단·ZTNA 거부 규칙 부품·알림 로그 |
 
 ## 현재 작동하는 기능 (5단계)
 
@@ -51,6 +52,19 @@
 - **한 곳으로 모음:** 자료 요청은 브라우저 → Vercel 서버 함수 → Supabase 한 길뿐입니다. 서버 함수가 로그인(토큰 검사)과 소유자 검사를 모두 맡습니다.
 - **원본 잠금:** 메모 테이블에 PUBLIC·anon·authenticated 권한이 없으므로, 앱 코드에서 주소와 공개 키를 알아내도 Data API로 메모를 읽거나 고칠 수 없습니다. 4단계의 RLS 정책 4개는 실수로 권한이 다시 열릴 때를 대비한 안전장치로 남겨 둡니다.
 - **남은 한계:** 서버 전용 키가 새면 모든 방어를 우회하므로 키는 Vercel 환경변수에만 둡니다. 로그인 시도 횟수 제한은 Supabase Auth 기본 제한에 맡깁니다. access token은 탭의 `sessionStorage`에 있으므로 화면에 스크립트 삽입(XSS)이 생기면 토큰이 샐 수 있습니다(화면은 `textContent`만 써서 막아 둠).
+
+## 보너스 xdr-01 무차별 로그인 공격 탐지 (`xdr/brute-force/`)
+
+| 파일 | 하는 일 |
+| --- | --- |
+| `read-alerts.mjs` | 경보에서 시각·출발 주소·계정·규칙 수준·설명만 뽑음(비밀값처럼 보이는 문자열은 `[가림]`). `node xdr/brute-force/read-alerts.mjs` → 경보 수 = 뽑은 줄 수 |
+| `patterns.json` | MITRE ATT&CK T1110 근거의 패턴 2개: 짧은 시간 같은 주소의 로그인 실패 연속(T1110.001), 여러 계정에 같은 비밀번호 대입(T1110.003) |
+| `decide.mjs` | 패턴 일치 → `block`(0.85 이상), 정상 → `record`, 애매함 → Jev에게 확신도 질문(`JEV_URL` 환경변수가 있을 때만). Jev 응답이 없으면 `alert`. 애매한 경보는 Jev 값이 높아도 0.84로 묶어 차단하지 않음 |
+| `ztna-plugin.mjs` | 판정기에 꽂는 확인 단계 하나: `checkSource({srcip, at})` → 거부 규칙에 걸리면 `deny`(`xdr_brute_force_block`), 아니면 통과. `src/decider.mjs`의 기존 규칙은 그대로 |
+| `connect.mjs` | `node xdr/brute-force/connect.mjs` → `block`만 `deny-rules.json`(만료 시각·근거 경보 번호)로, `block`·`alert`는 `xdr/alerts.log`에 한 줄씩(같은 경보는 다시 안 적음), 경보를 다시 흘려 막힘·통과 확인. 정상 이벤트에 나온 주소는 거부 규칙에서 제외 |
+| `result.json` | `npm run xdr:run -- brute-force` 결과 |
+
+한계: 현재 판정기 요청 계약(`aleph.decision.v1`)에는 출발 주소 칸이 없어 `src/decider.mjs` 안에서 주소로 막지 않습니다. 계약에 주소가 생기거나 주소를 아는 연결 지점에서 `checkSource`를 부릅니다. 경보는 수업용 가상 Wazuh 경보이며 실제 로그가 아닙니다.
 
 ## 메모가 남아 있는지 검색하는 확인 절차
 

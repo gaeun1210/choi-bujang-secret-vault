@@ -1,0 +1,33 @@
+{
+  "schema": "aleph.xdr.patterns.v1",
+  "moduleKey": "brute-force",
+  "basis": "MITRE ATT&CK T1110 Brute Force (https://attack.mitre.org/techniques/T1110/)",
+  "patterns": [
+    {
+      "id": "t1110_rapid_failures_same_source",
+      "name": "짧은 시간 같은 주소의 로그인 실패 연속",
+      "technique": "T1110.001",
+      "condition": {
+        "mitre": "T1110",
+        "minLevel": 10,
+        "minFailures": 15,
+        "description": "같은 주소(또는 같은 계정)에서 짧은 시간에 로그인 실패가 15건 이상 몰리고 규칙 수준이 10 이상"
+      },
+      "evidence": "MITRE ATT&CK T1110.001(비밀번호 추측): 공격자가 비밀번호를 반복해 넣어 보므로 짧은 시간에 같은 출발지의 로그인 실패가 연속으로 쌓인다."
+    },
+    {
+      "id": "t1110_password_spraying",
+      "name": "여러 계정에 같은 비밀번호 대입",
+      "technique": "T1110.003",
+      "condition": {
+        "mitre": "T1110",
+        "minLevel": 10,
+        "minAccounts": 5,
+        "minFailures": 10,
+        "keywords": ["여러 계정", "서로 다른 계정", "계정 이름을 바꿔", "같은 비밀번호"],
+        "description": "같은 주소가 계정 5개 이상(목록) 또는 '여러 계정·같은 비밀번호' 설명과 실패 10건 이상, 규칙 수준 10 이상"
+      },
+      "evidence": "MITRE ATT&CK T1110.003(패스워드 스프레이): 계정 잠금을 피하려고 흔한 비밀번호 하나를 여러 계정에 차례로 넣어 본다."
+    }
+  ]
+}
