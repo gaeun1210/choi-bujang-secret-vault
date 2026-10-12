@@ -12,7 +12,7 @@
         "bf-01",
         "bf-02"
       ],
-      "reason": "패턴 일치: 짧은 시간 같은 주소의 로그인 실패 연속 (T1110) / 패턴 일치: 여러 계정에 같은 비밀번호 대입 (T1110)"
+      "reason": "근거 패턴: 짧은 시간 같은 주소의 로그인 실패 연속 (T1110) / 근거 패턴: 여러 계정에 같은 비밀번호 대입 (T1110)"
     },
     {
       "ruleId": "xdr_brute_force_block",
@@ -22,7 +22,7 @@
       "evidenceAlertIds": [
         "bf-03"
       ],
-      "reason": "패턴 일치: 짧은 시간 같은 주소의 로그인 실패 연속 + 여러 계정에 같은 비밀번호 대입 (T1110)"
+      "reason": "근거 패턴: 짧은 시간 같은 주소의 로그인 실패 연속 + 여러 계정에 같은 비밀번호 대입 (T1110)"
     },
     {
       "ruleId": "xdr_brute_force_block",
@@ -32,7 +32,7 @@
       "evidenceAlertIds": [
         "bf-04"
       ],
-      "reason": "패턴 일치: 짧은 시간 같은 주소의 로그인 실패 연속 (T1110)"
+      "reason": "근거 패턴: 짧은 시간 같은 주소의 로그인 실패 연속 (T1110)"
     },
     {
       "ruleId": "xdr_brute_force_block",
@@ -42,7 +42,7 @@
       "evidenceAlertIds": [
         "bf-05"
       ],
-      "reason": "패턴 일치: 짧은 시간 같은 주소의 로그인 실패 연속 + 여러 계정에 같은 비밀번호 대입 (T1110)"
+      "reason": "근거 패턴: 짧은 시간 같은 주소의 로그인 실패 연속 + 여러 계정에 같은 비밀번호 대입 (T1110)"
     },
     {
       "ruleId": "xdr_brute_force_block",
@@ -52,7 +52,7 @@
       "evidenceAlertIds": [
         "bf-06"
       ],
-      "reason": "패턴 일치: 짧은 시간 같은 주소의 로그인 실패 연속 (T1110)"
+      "reason": "근거 패턴: 짧은 시간 같은 주소의 로그인 실패 연속 (T1110)"
     },
     {
       "ruleId": "xdr_brute_force_block",
@@ -62,7 +62,7 @@
       "evidenceAlertIds": [
         "bf-07"
       ],
-      "reason": "패턴 일치: 짧은 시간 같은 주소의 로그인 실패 연속 (T1110)"
+      "reason": "근거 패턴: 짧은 시간 같은 주소의 로그인 실패 연속 (T1110)"
     },
     {
       "ruleId": "xdr_brute_force_block",
@@ -72,7 +72,7 @@
       "evidenceAlertIds": [
         "bf-08"
       ],
-      "reason": "패턴 일치: 짧은 시간 같은 주소의 로그인 실패 연속 (T1110)"
+      "reason": "근거 패턴: 짧은 시간 같은 주소의 로그인 실패 연속 (T1110)"
     },
     {
       "ruleId": "xdr_brute_force_block",
@@ -82,7 +82,7 @@
       "evidenceAlertIds": [
         "bf-09"
       ],
-      "reason": "패턴 일치: 짧은 시간 같은 주소의 로그인 실패 연속 + 여러 계정에 같은 비밀번호 대입 (T1110)"
+      "reason": "근거 패턴: 짧은 시간 같은 주소의 로그인 실패 연속 + 여러 계정에 같은 비밀번호 대입 (T1110)"
     },
     {
       "ruleId": "xdr_brute_force_block",
@@ -92,7 +92,7 @@
       "evidenceAlertIds": [
         "bf-10"
       ],
-      "reason": "패턴 일치: 짧은 시간 같은 주소의 로그인 실패 연속 (T1110)"
+      "reason": "근거 패턴: 짧은 시간 같은 주소의 로그인 실패 연속 (T1110)"
     }
   ]
 }

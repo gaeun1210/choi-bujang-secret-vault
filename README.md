@@ -57,11 +57,11 @@
 
 | 파일 | 하는 일 |
 | --- | --- |
-| `read-alerts.mjs` | 경보에서 시각·출발 주소·계정·규칙 수준·설명만 뽑음(비밀값처럼 보이는 문자열은 `[가림]`). `node xdr/brute-force/read-alerts.mjs` → 경보 수 = 뽑은 줄 수 |
+| `read-alerts.mjs` | 확인용. 경보에서 시각·출발 주소·계정·규칙 수준·설명만 뽑음(비밀값처럼 보이는 문자열은 `[가림]`). `node xdr/brute-force/read-alerts.mjs` → 경보 수 = 뽑은 줄 수. `decide.mjs`는 이 파일을 불러오지 않음 |
 | `patterns.json` | MITRE ATT&CK T1110 근거의 패턴 2개: 짧은 시간 같은 주소의 로그인 실패 연속(T1110.001), 여러 계정에 같은 비밀번호 대입(T1110.003) |
-| `decide.mjs` | 패턴 일치 → `block`(0.85 이상), 정상 → `record`, 애매함 → Jev에게 확신도 질문(`JEV_URL` 환경변수가 있을 때만). Jev 응답이 없으면 `alert`. 애매한 경보는 Jev 값이 높아도 0.84로 묶어 차단하지 않음 |
+| `decide.mjs` | 심판이 이 파일 하나만 인터넷 없이 불러 씀. **import 없음, 파일 읽기·쓰기 없음, 바깥 질문 없음.** 패턴을 파일 맨 위 상수로 옮겨 두고 혼자 계산. 패턴과 뚜렷하게 맞으면 확신도 0.86~0.99 → `block`, T1110이지만 기준 미달이면 0.5~0.75 → `alert`, 패턴 신호가 없으면 0.05 → `record` |
+| `respond.mjs` | `node xdr/brute-force/respond.mjs` → `block`만 `deny-rules.json`(만료 시각·근거 경보 번호)으로, `block`·`alert`는 `xdr/alerts.log`에 한 줄씩(같은 경보는 다시 안 적음). 정상 이벤트에 나온 주소는 거부 규칙에서 제외. 시험 경보를 다시 흘려 막힘·통과 확인 |
 | `ztna-plugin.mjs` | 판정기에 꽂는 확인 단계 하나: `checkSource({srcip, at})` → 거부 규칙에 걸리면 `deny`(`xdr_brute_force_block`), 아니면 통과. `src/decider.mjs`의 기존 규칙은 그대로 |
-| `connect.mjs` | `node xdr/brute-force/connect.mjs` → `block`만 `deny-rules.json`(만료 시각·근거 경보 번호)로, `block`·`alert`는 `xdr/alerts.log`에 한 줄씩(같은 경보는 다시 안 적음), 경보를 다시 흘려 막힘·통과 확인. 정상 이벤트에 나온 주소는 거부 규칙에서 제외 |
 | `result.json` | `npm run xdr:run -- brute-force` 결과 |
 
 한계: 현재 판정기 요청 계약(`aleph.decision.v1`)에는 출발 주소 칸이 없어 `src/decider.mjs` 안에서 주소로 막지 않습니다. 계약에 주소가 생기거나 주소를 아는 연결 지점에서 `checkSource`를 부릅니다. 경보는 수업용 가상 Wazuh 경보이며 실제 로그가 아닙니다.

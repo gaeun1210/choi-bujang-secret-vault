@@ -1,21 +1,39 @@
-// 보너스 xdr-01 판단 모듈: 경보를 T1110 패턴과 맞춰 보고, 애매한 건만 Jev에게 확신도를 묻습니다.
+// 보너스 xdr-01 판단 모듈 — 심판은 인터넷 없이 이 파일 하나만 불러 경보마다 decide(alert)를 부릅니다.
+// 그래서 이 파일은 다른 파일·패키지를 불러오지 않고, 파일을 읽거나 쓰지 않고, 바깥에 묻지 않습니다.
 // 반환: { action: 'block' | 'alert' | 'record', confidence(0~1), reason(근거 패턴 이름 한 줄) }
-// 기준: 확신도 0.85 이상 block · 0.5 이상 alert · 그 아래 record. Jev가 응답하지 않으면 alert.
-import { readFileSync } from 'node:fs';
-import { extractAlert } from './read-alerts.mjs';
+// confidence = 경보가 패턴과 얼마나 뚜렷하게 맞는지. 0.85 이상 block · 0.5 이상 alert · 그 아래 record.
 
-const { patterns } = JSON.parse(readFileSync(new URL('./patterns.json', import.meta.url), 'utf8'));
-const RAPID = patterns.find(item => item.id === 't1110_rapid_failures_same_source');
-const SPRAY = patterns.find(item => item.id === 't1110_password_spraying');
+// xdr/brute-force/patterns.json 의 패턴을 그대로 옮긴 상수 (근거: MITRE ATT&CK T1110)
+const PATTERNS = Object.freeze([
+  Object.freeze({
+    id: 't1110_rapid_failures_same_source',
+    name: '짧은 시간 같은 주소의 로그인 실패 연속',
+    technique: 'T1110.001',
+    condition: Object.freeze({ mitre: 'T1110', minLevel: 10, minFailures: 15 }),
+    evidence: 'MITRE ATT&CK T1110.001(비밀번호 추측): 공격자가 비밀번호를 반복해 넣어 보므로 짧은 시간에 같은 출발지의 로그인 실패가 연속으로 쌓인다.',
+  }),
+  Object.freeze({
+    id: 't1110_password_spraying',
+    name: '여러 계정에 같은 비밀번호 대입',
+    technique: 'T1110.003',
+    condition: Object.freeze({
+      mitre: 'T1110', minLevel: 10, minAccounts: 5, minFailures: 10,
+      keywords: Object.freeze(['여러 계정', '서로 다른 계정', '계정 이름을 바꿔', '같은 비밀번호']),
+    }),
+    evidence: 'MITRE ATT&CK T1110.003(패스워드 스프레이): 계정 잠금을 피하려고 흔한 비밀번호 하나를 여러 계정에 차례로 넣어 본다.',
+  }),
+]);
+const [RAPID, SPRAY] = PATTERNS;
 
-export const BLOCK_AT = 0.85;
-export const ALERT_AT = 0.5;
-// 애매한 경보는 Jev 답이 아무리 높아도 차단까지 가지 않습니다 (아주 명확한 경우에만 차단).
-const AMBIGUOUS_MAX = 0.84;
-const JEV_TIMEOUT_MS = 2500;
+const BLOCK_AT = 0.85;
+const ALERT_AT = 0.5;
 
 const round = value => Math.round(value * 100) / 100;
 const clamp = (value, low, high) => Math.min(high, Math.max(low, value));
+const toInt = value => {
+  const number = Number.parseInt(String(value ?? ''), 10);
+  return Number.isSafeInteger(number) && number >= 0 ? number : 0;
+};
 
 function actionFor(confidence) {
   if (confidence >= BLOCK_AT) return 'block';
@@ -23,73 +41,58 @@ function actionFor(confidence) {
   return 'record';
 }
 
-function matchesRapid(row) {
+// 경보에서 판단에 필요한 값만 꺼냅니다 (원본은 바꾸지 않음)
+function facts(alert) {
+  const rule = alert && typeof alert === 'object' ? alert.rule ?? {} : {};
+  const data = alert && typeof alert === 'object' ? alert.data ?? {} : {};
+  const accounts = typeof data.accounts === 'string'
+    ? data.accounts.split(',').map(item => item.trim()).filter(Boolean).length
+    : 0;
+  return {
+    t1110: Array.isArray(rule.mitre) && rule.mitre.includes('T1110'),
+    level: toInt(rule.level),
+    failures: toInt(data.count),
+    accounts,
+    description: typeof rule.description === 'string' ? rule.description : '',
+  };
+}
+
+function matchesRapid(f) {
   const c = RAPID.condition;
-  return row.mitre.includes(c.mitre) && (row.level ?? 0) >= c.minLevel && (row.failures ?? 0) >= c.minFailures;
+  return f.t1110 && f.level >= c.minLevel && f.failures >= c.minFailures;
 }
 
-function matchesSpray(row) {
+function matchesSpray(f) {
   const c = SPRAY.condition;
-  if (!row.mitre.includes(c.mitre) || (row.level ?? 0) < c.minLevel) return false;
-  if (row.accountCount >= c.minAccounts) return true;
-  const said = c.keywords.some(word => (row.description ?? '').includes(word))
-    || /계정\s*\d+\s*개/u.test(row.description ?? '');
-  return said && (row.failures ?? 0) >= c.minFailures;
+  if (!f.t1110 || f.level < c.minLevel) return false;
+  if (f.accounts >= c.minAccounts) return true;
+  const said = c.keywords.some(word => f.description.includes(word)) || /계정\s*\d+\s*개/u.test(f.description);
+  return said && f.failures >= c.minFailures;
 }
 
-// Jev에게 확신도(0~1)를 묻습니다. JEV_URL이 없거나, 늦거나, 형식이 틀리면 null(응답 없음).
-// 보내는 값은 경보 요약뿐이며 키·비밀값은 넣지 않습니다.
-async function askJev(row) {
-  const url = process.env.JEV_URL;
-  if (!url || !url.startsWith('https://')) return null;
-  try {
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-      body: JSON.stringify({
-        question: '이 로그인 실패 경보가 무차별 대입 공격일 확신도를 0~1 숫자로 답해 주세요.',
-        alert: { id: row.id, time: row.time, srcip: row.srcip, user: row.user,
-          level: row.level, description: row.description, failures: row.failures },
-      }),
-      redirect: 'error',
-      signal: AbortSignal.timeout(JEV_TIMEOUT_MS),
-    });
-    if (!response.ok) return null;
-    const data = await response.json();
-    const value = Number(data?.confidence);
-    return Number.isFinite(value) && value >= 0 && value <= 1 ? value : null;
-  } catch {
-    return null;
-  }
-}
+export function decide(alert) {
+  const f = facts(alert);
 
-export async function decide(alert) {
-  const row = extractAlert(alert);
-
-  // 1) 명확한 공격: 패턴 조건을 그대로 만족 → 차단
-  const rapid = matchesRapid(row);
-  const spray = matchesSpray(row);
+  // 1) 패턴 조건을 그대로 만족 → 뚜렷함. 수준·실패 수가 클수록 확신도 상승 (0.86~0.99)
+  const rapid = matchesRapid(f);
+  const spray = matchesSpray(f);
   if (rapid || spray) {
     const names = [rapid && RAPID.name, spray && SPRAY.name].filter(Boolean).join(' + ');
-    const confidence = round(clamp(0.86 + ((row.level ?? 10) - 10) * 0.02
-      + Math.min(row.failures ?? 0, 100) / 1000 + (rapid && spray ? 0.02 : 0), BLOCK_AT, 0.99));
-    return { action: 'block', confidence, reason: `패턴 일치: ${names} (T1110)` };
+    const confidence = round(clamp(0.86 + (f.level - 10) * 0.02 + Math.min(f.failures, 100) / 1000
+      + (rapid && spray ? 0.02 : 0), BLOCK_AT, 0.99));
+    return { action: actionFor(confidence), confidence, reason: `근거 패턴: ${names} (T1110)` };
   }
 
-  // 2) 정상 이벤트: T1110 표시가 없고 규칙 수준이 낮음 → 기록만
-  if (!row.mitre.includes('T1110') && (row.level ?? 0) <= 4) {
-    return { action: 'record', confidence: 0.05, reason: '패턴 불일치: 로그인 실패 연속·여러 계정 대입 신호 없음 (정상 이벤트)' };
+  // 2) T1110 표시는 있지만 기준 미달 → 일부만 맞음. 실패 수에 따라 0.5~0.75 (알림만, 차단 안 함)
+  if (f.t1110) {
+    const confidence = round(clamp(ALERT_AT + Math.min(f.failures, 14) / 14 * 0.25, ALERT_AT, 0.75));
+    return { action: actionFor(confidence), confidence,
+      reason: `근거 패턴: ${RAPID.name} 일부 일치(실패 ${f.failures}건, 기준 ${RAPID.condition.minFailures}건 미달)` };
   }
 
-  // 3) 애매함: T1110 관련이지만 패턴 기준에 못 미침 → Jev에게 묻기
-  const hint = (row.failures ?? 0) > 0 ? `실패 ${row.failures}건` : '실패 수 없음';
-  const jev = await askJev(row);
-  if (jev === null) {
-    const local = round(clamp(ALERT_AT + Math.min(row.failures ?? 0, 14) / 14 * 0.2, ALERT_AT, AMBIGUOUS_MAX));
-    return { action: 'alert', confidence: local,
-      reason: `애매함: ${RAPID.name} 기준 미달(${hint}) · Jev 응답 없음 → 알림` };
+  // 3) T1110 표시가 없음 → 패턴과 맞지 않음. 수준이 높으면 사람이 보도록 알림, 낮으면 기록
+  if (f.level >= 7) {
+    return { action: 'alert', confidence: ALERT_AT, reason: '근거 패턴: 없음 (T1110 표시 없음, 경보 수준이 높아 확인 필요)' };
   }
-  const confidence = round(clamp(jev, 0, AMBIGUOUS_MAX));
-  return { action: actionFor(confidence), confidence,
-    reason: `애매함: ${RAPID.name} 기준 미달(${hint}) · Jev 확신도 ${round(jev)}` };
+  return { action: 'record', confidence: 0.05, reason: '근거 패턴: 없음 (로그인 실패 연속·여러 계정 대입 신호 없음, 정상 이벤트)' };
 }
