@@ -11,7 +11,8 @@
 | 3단계 | `b2797a4` 「3단계 저장점」 | Supabase Auth 이메일·비밀번호 로그인·로그아웃, 서버의 토큰 검사(`src/verify-login.mjs`), 로그인 사용자의 가상 메모 추가·수정·삭제 API |
 | 4단계 | `cc06beb` 「4단계 저장점」 | API가 확인된 사용자 ID와 DB `owner_id`를 비교해 읽기·추가·수정·삭제를 본인 메모로 제한, B 시험 메모 SQL, 메모 테이블 RLS·최소 권한 SQL 제안 |
 | 5단계 | `d323be8` 「5단계 저장점」 | 로그인·로그아웃도 서버 함수로 옮겨 화면 코드에서 Supabase 주소·공개 키·SDK 제거, 메모 테이블의 PUBLIC·anon·authenticated 직접 권한 회수 SQL, `originalApiUrl` 기록 |
-| 보너스 xdr-01 | 「보너스 xdr-01 저장점」 | 무차별 로그인 공격 탐지(T1110): 경보 읽기·패턴·판단·ZTNA 거부 규칙 부품·알림 로그 |
+| 보너스 xdr-01 | `1dba0c2` 「보너스 xdr-01 저장점」 | 무차별 로그인 공격 탐지(T1110): 경보 읽기·패턴·판단·ZTNA 거부 규칙 부품·알림 로그 |
+| 보너스 xdr-02 | 「보너스 xdr-02 저장점」 | 웹 주입 공격 탐지(T1190): SQL 구문·스크립트 태그·경로 이탈 반복·명령 구분자 패턴, 판단·ZTNA 거부 규칙 부품·알림 로그 |
 
 ## 현재 작동하는 기능 (5단계)
 
@@ -65,6 +66,19 @@
 | `result.json` | `npm run xdr:run -- brute-force` 결과 |
 
 한계: 현재 판정기 요청 계약(`aleph.decision.v1`)에는 출발 주소 칸이 없어 `src/decider.mjs` 안에서 주소로 막지 않습니다. 계약에 주소가 생기거나 주소를 아는 연결 지점에서 `checkSource`를 부릅니다. 경보는 수업용 가상 Wazuh 경보이며 실제 로그가 아닙니다.
+
+## 보너스 xdr-02 웹 주입 공격 탐지 (`xdr/web-injection/`)
+
+| 파일 | 하는 일 |
+| --- | --- |
+| `read-alerts.mjs` | 확인용. 경보에서 시각·출발 주소·계정·규칙 수준·설명만 뽑음(요청 주소는 출력하지 않고, 비밀값처럼 보이는 문자열은 `[가림]`). 경보 26건 = 뽑은 줄 26줄. `decide.mjs`는 이 파일을 불러오지 않음 |
+| `patterns.json` | MITRE ATT&CK T1190 근거 패턴 4개: 요청 인자 안의 SQL 구문, 스크립트 태그, 경로 거슬러 올라가기(../) 반복, 명령 구분자(T1190이 참고하는 OWASP Top 10 Injection) |
+| `decide.mjs` | 심판이 이 파일 하나만 인터넷 없이 불러 씀. **import 없음, 파일 읽기·쓰기 없음, 바깥 질문 없음.** T1190 + 수준 10 이상 + 같은 주소 5번 이상 반복 + 패턴 일치면 확신도 0.86~0.99 → `block`, T1190이지만 반복·표식이 약하면 0.5~0.75 → `alert`, 신호 없으면 0.05 → `record`. `select`·`script`·`up` 같은 평범한 단어 한 번은 차단하지 않음 |
+| `respond.mjs` | `node xdr/web-injection/respond.mjs` → `block`만 `deny-rules.json`(만료 시각·근거 경보 번호)으로, `block`·`alert`는 `xdr/alerts.log`에 한 줄씩. 정상 이벤트에 나온 주소는 거부 규칙에서 제외. 시험 경보를 다시 흘려 막힘·통과 확인 |
+| `ztna-plugin.mjs` | 판정기에 꽂는 확인 단계: `checkSource({srcip, at})` → 거부 규칙에 걸리면 `deny`(`xdr_web_injection_block`). `src/decider.mjs`의 기존 규칙은 그대로 |
+| `result.json` | `npm run xdr:run -- web-injection` 결과 |
+
+경보 속 `doc-sql-…` 같은 값은 수업용 문서 표기(실제 공격 문자열 대신 쓰는 자리표시)이며, 판단 모듈은 실제 형태(`' OR 1=1`, `UNION SELECT`, `<script`, `../../`, `; cat` 등)도 함께 봅니다.
 
 ## 메모가 남아 있는지 검색하는 확인 절차
 

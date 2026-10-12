@@ -1,0 +1,52 @@
+{
+  "schema": "aleph.xdr.patterns.v1",
+  "moduleKey": "web-injection",
+  "basis": "MITRE ATT&CK T1190 Exploit Public-Facing Application (https://attack.mitre.org/techniques/T1190/)",
+  "clearWhen": "T1190 표시 + 규칙 수준 10 이상 + 같은 주소에서 5번 이상 반복 + 아래 패턴 표식이 요청 인자에 있음",
+  "patterns": [
+    {
+      "id": "t1190_sql_in_parameter",
+      "name": "요청 인자 안의 SQL 구문",
+      "condition": {
+        "mitre": "T1190",
+        "markers": ["doc-sql-", "doc-mixed-marker", "' or 1=1", "union select", "; drop ", "select ... from"],
+        "descriptionKeywords": ["SQL 구문", "SQL 표식", "데이터베이스 조회"],
+        "description": "주소·입력 칸 인자에 SQL 구문(따옴표+OR 참 조건, UNION SELECT, 조회 이어 붙이기) 또는 수업용 SQL 표식이 들어 있음"
+      },
+      "evidence": "MITRE ATT&CK T1190: 공격자는 공개된 웹 앱의 입력을 이용해 SQL 주입으로 데이터베이스 명령을 실행한다(무브잇 CVE-2023-34362가 이 형태)."
+    },
+    {
+      "id": "t1190_script_tag_in_parameter",
+      "name": "요청 인자 안의 스크립트 태그",
+      "condition": {
+        "mitre": "T1190",
+        "markers": ["doc-script-", "doc-mixed-marker", "<script", "%3cscript", "javascript:", "onerror="],
+        "descriptionKeywords": ["스크립트 삽입 표기", "스크립트 표식"],
+        "description": "인자에 <script> 태그·javascript: 같은 스크립트 삽입 형태 또는 수업용 스크립트 표식이 들어 있음"
+      },
+      "evidence": "MITRE ATT&CK T1190: 공개 웹 앱의 입력 검증 약점을 노린 주입 공격에는 인자에 스크립트를 끼워 넣는 형태(OWASP Top 10 Injection·XSS)가 포함된다."
+    },
+    {
+      "id": "t1190_path_traversal_repeat",
+      "name": "경로 거슬러 올라가기(../) 반복",
+      "condition": {
+        "mitre": "T1190",
+        "markers": ["doc-up-repeat", "../../", "..%2f..%2f", "%2e%2e%2f%2e%2e%2f"],
+        "descriptionKeywords": ["거슬러 올라가는 표기", "경로 이탈 표기"],
+        "description": "인자에 ../ 가 두 번 이상 이어지거나 수업용 경로 이탈 표식이 들어 있음 (up 한 번처럼 반복 없는 단어는 제외)"
+      },
+      "evidence": "MITRE ATT&CK T1190: 공개 웹 앱의 파일 경로 처리 약점을 노려 ../ 를 반복해 허용된 폴더 밖 파일을 읽는다(경로 이탈, CWE-22)."
+    },
+    {
+      "id": "t1190_command_separator_in_parameter",
+      "name": "요청 인자 안의 명령 구분자",
+      "condition": {
+        "mitre": "T1190",
+        "markers": ["doc-cmd-separator", "; cat ", "| id", "&& whoami", "$("],
+        "descriptionKeywords": ["명령 구분자 표기"],
+        "description": "인자에 ; | && $( 같은 명령 구분자 뒤 시스템 명령 형태 또는 수업용 명령 구분자 표식이 들어 있음"
+      },
+      "evidence": "MITRE ATT&CK T1190: 공개 웹 앱의 입력이 서버 명령에 섞이도록 구분자를 넣는 명령 주입(OWASP Top 10 Injection)으로 서버에서 명령을 실행한다."
+    }
+  ]
+}
