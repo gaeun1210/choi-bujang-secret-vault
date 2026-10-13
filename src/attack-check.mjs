@@ -182,6 +182,13 @@ async function stepThreeChecks(config) {
     results.push({ attackId: 'unregistered_device_read', expected: '미등록 기기 요청은 판정기가 deny·device_not_registered',
       observed: '미실행: 미등록 기기 공격은 심판이 반 엔진으로 보냄 (로컬 연습은 npm run decider:test)' });
   }
+  if (config.step >= 8) {
+    const notices = await tryFetch(new URL('/api/notices', app));
+    results.push({ attackId: 'anonymous_notice_list', expected: '로그인 없이 공지 목록 요청 시 401 JSON',
+      observed: await denial(notices)() });
+    results.push({ attackId: 'student_notice_update', expected: '일반 학생 토큰으로 공지 수정 시 403 INSTRUCTOR_ONLY',
+      observed: '미실행: 비밀번호를 코드에 넣지 않으므로 학생이 직접 확인 (판정기 로컬 연습은 deny·zone_not_allowed)' });
+  }
   if (config.step >= 7) {
     results.push({ attackId: 'unusual_access_before_relogin', expected: '복합 이상 접속은 다시 로그인 전 step_up·자료 없음',
       observed: '미실행: 재로그인 계약(stepUp)을 검증하는 반 엔진이 이 배포 앞에 없음 (로컬 연습은 npm run fixture:7)' });
@@ -207,6 +214,6 @@ async function stepThreeChecks(config) {
 export async function runAttackChecks(config) {
   if (config.step === 1) return stepOneChecks(config);
   if (config.step === 2) return stepTwoChecks(config);
-  if (config.step >= 3 && config.step <= 7) return stepThreeChecks(config);
+  if (config.step >= 3 && config.step <= 8) return stepThreeChecks(config);
   throw new Error('이 단계의 공격 점검을 src/attack-check.mjs에 구현해 주세요.');
 }

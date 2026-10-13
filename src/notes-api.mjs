@@ -96,14 +96,14 @@ const toNote = row => ({ id: row.note_id, title: row.title, body: row.content })
 const owned = (rows, userId) => rows.filter(row => row.owner_id === userId);
 
 // 학습용 DB(PostgREST) 호출. 실패 이유는 상태 코드만 남깁니다.
-async function db(path, { method = 'GET', body, prefer } = {}) {
+async function db(path, { method = 'GET', body, prefer, table = 'vault_notes' } = {}) {
   const baseUrl = process.env.SUPABASE_URL;
   const secretKey = process.env.SUPABASE_SECRET_KEY;
   if (!baseUrl || !secretKey) throw Object.assign(new Error('config'), { status: 500 });
   const headers = { apikey: secretKey, Accept: 'application/json' };
   if (body) headers['Content-Type'] = 'application/json';
   if (prefer) headers.Prefer = prefer;
-  const upstream = await fetch(new URL(`/rest/v1/vault_notes${path}`, baseUrl), {
+  const upstream = await fetch(new URL(`/rest/v1/${table}${path}`, baseUrl), {
     method, headers, body: body ? JSON.stringify(body) : undefined,
     redirect: 'error', signal: AbortSignal.timeout(8000),
   });
@@ -115,6 +115,24 @@ async function db(path, { method = 'GET', body, prefer } = {}) {
 }
 
 const SELECT = 'select=note_id,owner_id,title,content';
+
+// ── 8단계: 자원 ID와 구역 ─────────────────────────────────────
+// 메모와 강사 공지는 서로 다른 구역·자원 ID를 씁니다. 서버는 요청 경로로 구역을 정하고
+// 자원 ID는 "구역:UUID" 모양으로만 다룹니다(예: note:…, notice:…). 응답 모양 {id,title,body}는 그대로입니다.
+export const ZONES = Object.freeze({
+  note: Object.freeze({ zone: 'own_notes', table: 'vault_notes', idColumn: 'note_id', basePath: '/api/notes' }),
+  notice: Object.freeze({ zone: 'notices', table: 'vault_notices', idColumn: 'notice_id', basePath: '/api/notices' }),
+});
+export const resourceId = (kind, id) => `${kind}:${String(id).toLowerCase()}`;
+
+// 거부 사유를 짧게 남깁니다. 토큰·본문·이메일은 남기지 않고, 사용자 ID는 앞 8자리만.
+export function logDenial(code, resource, userId) {
+  console.warn(`deny ${code} resource=${resource} user=${String(userId ?? '-').slice(0, 8)}`);
+}
+
+// 본문에 role·isInstructor 같은 값이 와도 권한 판단에 쓰지 않습니다(기록만).
+const ROLE_FIELDS = ['role', 'roles', 'isInstructor', 'is_instructor', 'admin', 'isAdmin'];
+export const claimedRole = input => ROLE_FIELDS.some(key => input?.[key] !== undefined);
 
 export const notes = {
   async listOwned(userId) {
@@ -150,6 +168,34 @@ export const notes = {
       method: 'DELETE', prefer: 'return=representation',
     });
     return owned(rows, userId).length > 0;
+  },
+};
+
+// 강사 권한: 화면 메뉴나 요청 본문이 아니라 DB(vault_staff)에 저장된 값만 봅니다.
+export async function isInstructor(userId) {
+  const rows = await db(`?select=user_id,role&user_id=eq.${userId}&role=eq.instructor&limit=1`, { table: 'vault_staff' });
+  return rows.some(row => row.user_id === userId && row.role === 'instructor');
+}
+
+const NOTICE_SELECT = 'select=notice_id,title,content';
+const toNotice = row => ({ id: row.notice_id, title: row.title, body: row.content });
+
+export const notices = {
+  async list() {
+    return (await db(`?${NOTICE_SELECT}&order=id.asc&limit=50`, { table: 'vault_notices' })).map(toNotice);
+  },
+  async get(id) {
+    const rows = await db(`?${NOTICE_SELECT}&notice_id=eq.${id}&limit=1`, { table: 'vault_notices' });
+    return rows[0] ? toNotice(rows[0]) : null;
+  },
+  async update(id, userId, notice) {
+    const patch = { updated_by: userId, updated_at: new Date().toISOString() };
+    if (notice.title !== undefined) patch.title = notice.title;
+    if (notice.body !== undefined) patch.content = notice.body;
+    const rows = await db(`?notice_id=eq.${id}&${NOTICE_SELECT}`, {
+      table: 'vault_notices', method: 'PATCH', prefer: 'return=representation', body: patch,
+    });
+    return rows[0] ? toNotice(rows[0]) : null;
   },
 };
 

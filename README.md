@@ -14,18 +14,25 @@
 | 보너스 xdr-01 | `1dba0c2` 「보너스 xdr-01 저장점」 | 무차별 로그인 공격 탐지(T1110): 경보 읽기·패턴·판단·ZTNA 거부 규칙 부품·알림 로그 |
 | 보너스 xdr-02 | `a110fd6` 「보너스 xdr-02 저장점」 | 웹 주입 공격 탐지(T1190): SQL 구문·스크립트 태그·경로 이탈 반복·명령 구분자 패턴, 판단·ZTNA 거부 규칙 부품·알림 로그 |
 | 6단계 | `3069eb8` 「6단계 저장점」 | 판정기 `src/decider.mjs`에 기기 등록 규칙 `device_registered` 추가: 등록 기기의 읽기만 허용, 미등록·값 없음은 `deny`·`device_not_registered` |
-| 7단계 | 「7단계 저장점」 | 판정기 입력 검사(접속 정보는 엔진의 가상 사건 출처일 때만 신뢰) + 규칙 `step_up_required`: 새벽 시각·처음 보는 네트워크·갑작스러운 대량 읽기가 겹치면 다시 로그인 요구 |
+| 7단계 | `0edf640` 「7단계 저장점」 | 판정기 입력 검사(접속 정보는 엔진의 가상 사건 출처일 때만 신뢰) + 규칙 `step_up_required`: 새벽 시각·처음 보는 네트워크·갑작스러운 대량 읽기가 겹치면 다시 로그인 요구 |
+| 8단계 | 「8단계 저장점」 | 자원 구역 나누기: 메모(`note:`)·강사 공지(`notice:`) 자원 ID, 판정기 구역 규칙(정확한 메서드·경로 허용 목록), 자료 API의 소유자·DB 강사 권한 재확인, 공지 테이블 SQL |
 
-## 판정기 (6~7단계)
+## 판정기 (6~8단계)
 
 `src/decider.mjs`의 `decide(request)`는 반 엔진이 신원·기기·경로를 확인한 뒤 보낸 요청만 받습니다(계약: `docs/DECIDER_REQUEST.md`). 규칙 이름은 같은 파일의 `RULE_IDS`에 있습니다. 위에서부터 차례로 봅니다.
 
 | 순서 | 규칙 | 조건 | 결과 |
 | --- | --- | --- | --- |
 | 1 | `device_registered` | `deviceRegistered`가 정확히 `true`가 아님(미등록·값 없음) | `deny` · `device_not_registered` |
-| 2 | `step_up_required` | 등록 기기의 읽기인데, 믿을 수 있는 가상 사건에서 **새벽 0~5시 + 처음 보는 네트워크 + 최근 10분 사건 수 합 10 이상**이 모두 겹침, 그리고 5분 안의 새 로그인 확인이 없음 | `step_up` · `step_up_required` (자료 없음, 다시 로그인 요구) |
-| 3 | `device_registered` (+`step_up_required`) | 등록 기기의 읽기(`GET`·`HEAD`), 또는 2번 상황에서 엔진이 새 로그인(`stepUp.verified=true`, `authAgeSeconds` 300초 이하)을 확인해 다시 보낸 요청 | `allow` · `approved` |
-| 4 | `starter.deny` | 그 밖의 요청 | `deny` · `starter_not_ready` |
+| 2 | `starter.deny` | 메서드·경로가 문자열이 아닌 깨진 요청 | `deny` · `starter_not_ready` |
+| 3 | `zone_route_allowlist` | 아래 구역 표에 없는 메서드·경로, 쿼리가 붙은 요청(`queryLength`≠0), `route`와 `path` 불일치, `:id` 자리에 기능 이름(`export` 등)·더 깊은 경로 | `deny` · `route_not_allowed` |
+| 4 | 구역 규칙 | 엔진이 확인한 사용자(`subjectId`)가 없음 | `deny` · `zone_not_allowed` |
+| 5 | `zone_notice_instructor_only` | `PUT /notices/:id` — 현재 계약에 엔진이 확인한 강사 역할이 없어 브라우저 값으로 채우지 않고 모두 거부 | `deny` · `zone_not_allowed` |
+| 6 | `step_up_required` | 읽기인데 이상 신호 세 개가 겹치고 5분 안의 새 로그인 확인이 없음 | `step_up` · `step_up_required` |
+| 7 | `device_registered` + `zone_own_notes` / `zone_notices_read` | 자기 메모 읽기·수정(`GET /notes`, `GET·PUT /notes/:id`), 공지 읽기(`GET /notices`, `GET /notices/:id`) | `allow` · `approved` |
+| (6번 기준) | `step_up_required` | 등록 기기의 읽기인데, 믿을 수 있는 가상 사건에서 **새벽 0~5시 + 처음 보는 네트워크 + 최근 10분 사건 수 합 10 이상**이 모두 겹침, 그리고 5분 안의 새 로그인 확인이 없음 | `step_up` · `step_up_required` (자료 없음, 다시 로그인 요구) |
+
+**구역 표 (판정기 경로 모양):** `GET /notes`, `GET /notes/:id`, `PUT /notes/:id` → 자기 메모(`own_notes`) · `GET /notices`, `GET /notices/:id` → 공지 읽기 · `PUT /notices/:id` → 강사만. 판정기의 `subjectId`는 가명이라 메모 주인(`owner_id`)과 직접 비교하지 않으므로, **B가 A의 메모를 요청하는 경우는 최종 자료 API가 거부**합니다(아래).
 
 ### 입력 검사 (7단계)
 
@@ -40,6 +47,18 @@
 2. `npm run fixture:7` → `정상 사건: allow`, `복합 이상 사건: step_up`
 3. 이 명령들은 가상 요청 연습이며 심판 판정이 아닙니다. 다시 로그인 전 자료 차단과 새 요청 허용의 실측은 재로그인 계약(`stepUp`)을 검증하는 반 엔진이 있는 환경에서 심판이 합니다(이 저장소의 자기 점검에는 미실행으로 기록).
 4. 이번 과정에는 따로 설치할 접속 프로그램이 없습니다. 인증서·CA·키는 만들지 않았고, 자료실 화면(`/`)과 `/api/notes…`는 바뀌지 않았습니다.
+
+## 자원 구역과 자료 API 재확인 (8단계)
+
+| 구역 | 자원 ID | 서버 주소 | 읽기 | 수정 |
+| --- | --- | --- | --- | --- |
+| 자기 메모 `own_notes` | `note:<UUID>` (`vault_notes.note_id`) | `/api/notes`, `/api/notes/:id` (기존 그대로) | 확인된 사용자 = `owner_id`인 메모만 | 같은 조건 + 소유자 변경 403 |
+| 강사 공지 `notices` | `notice:<UUID>` (`vault_notices.notice_id`) | `/api/notices`, `/api/notices/:id` (새로 추가, 화면 메뉴는 그대로) | 로그인한 사용자 누구나 | DB `vault_staff`에 `instructor`로 저장된 사용자만, 그 밖에는 `403 INSTRUCTOR_ONLY` |
+
+- **직접 API 요청도 같은 검사:** 화면 메뉴를 거치지 않고 API를 불러도 서버가 토큰으로 확인한 사용자 ID와 DB의 `owner_id`·`vault_staff`를 다시 대조합니다. 남의 메모·없는 메모는 같은 `404`로 거부해 존재 여부를 알리지 않고, 공지 경로에 메모 ID를 넣는 식으로 구역을 섞어도 `404`입니다.
+- **본문의 role은 믿지 않음:** `role`, `isInstructor` 같은 값이 와도 권한 판단에 쓰지 않고 `body_role_ignored`로 기록만 합니다.
+- **거부 사유:** 서버 기록에 `deny <사유> resource=<구역:ID> user=<앞 8자리>` 한 줄(`not_owner_or_missing`, `owner_change`, `instructor_only`, `invalid_resource_id`, `body_role_ignored`). 토큰·본문·이메일은 남기지 않습니다.
+- **DB 준비 (8단계, 검토 후 한 번):** `supabase/step8-zones.sql`의 [가] → [나]를 Run. 공지 1건이 들어가고, 두 테이블 모두 RLS 켬·anon·authenticated 권한 없음이면 정상입니다. 강사 지정은 선택(주석 처리된 SQL)이며, 지정하지 않으면 모든 학생의 공지 수정이 거부됩니다.
 
 ## 현재 작동하는 기능 (5단계)
 
