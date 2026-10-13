@@ -10,8 +10,9 @@ const READ_METHODS = new Set(['GET', 'HEAD']);
 // ── 8단계 구역 표: 엔진이 확인한 메서드 + 정확한 경로 모양만 허용합니다. 표에 없는 경로는 거부. ──
 // 경로는 자료 ID 하나만 고르고(쿼리로 기능을 고르지 않음), :id와 같은 깊이에 기능 경로를 두지 않습니다.
 // services: 그 경로를 받을 수 있는, 엔진이 확인한 서비스 이름. 다른 서비스의 같은 모양 경로는 다른 구역입니다.
+// 메모 목록(GET /notes)은 두지 않습니다: 판정기는 메모 주인을 모르므로 목록 경로는 여러 사람의 메모를
+// 한꺼번에 여는 길이 됩니다. 메모는 자료 ID 한 건씩만 엽니다.
 const ZONE_ROUTES = Object.freeze([
-  { method: 'GET', shape: '/notes', zone: 'own_notes', rule: 'zone_own_notes', services: ['notes'] },
   { method: 'GET', shape: '/notes/:id', zone: 'own_notes', rule: 'zone_own_notes', services: ['notes'] },
   { method: 'PUT', shape: '/notes/:id', zone: 'own_notes', rule: 'zone_own_notes', services: ['notes'] },
   { method: 'GET', shape: '/notices', zone: 'notices', rule: 'zone_notices_read', services: ['notes', 'notices'] },
@@ -51,7 +52,8 @@ function otherSubjectId(id, subjectId) {
 }
 const RESOURCE_ID = /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/u;
 // 자료 ID 자리에 기능 이름이 오면 자료가 아니라 기능을 고르는 것이므로 거부합니다.
-const FEATURE_WORDS = new Set(['export', 'import', 'download', 'backup', 'bulk', 'all', 'admin', 'search', 'dump', 'sync']);
+const FEATURE_WORDS = new Set(['export', 'import', 'download', 'backup', 'bulk', 'all', 'admin', 'search', 'dump', 'sync',
+  'list', 'lists', 'index', 'everyone', 'everything', 'users', 'others', 'shared', 'public', 'feed', 'batch', 'query']);
 
 // 요청 경로가 구역 표의 한 줄과 정확히 맞으면 그 줄(과 :id 값)을, 아니면 null.
 export function matchZoneRoute(request) {

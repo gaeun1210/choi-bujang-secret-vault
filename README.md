@@ -29,16 +29,18 @@
 | 4 | 구역 규칙 | 엔진이 확인한 사용자(`subjectId`)가 없음 | `deny` · `route_not_allowed` |
 | 5 | `zone_notice_instructor_only` | `PUT /notices/:id` — 현재 계약에 엔진이 확인한 강사 역할이 없어 브라우저 값으로 채우지 않고 모두 거부 | `deny` · `route_not_allowed` |
 | 6 | `step_up_required` | 읽기인데 이상 신호 세 개가 겹치고 5분 안의 새 로그인 확인이 없음 | `step_up` · `step_up_required` |
-| 7 | `device_registered` + `zone_own_notes` / `zone_notices_read` | 자기 메모 읽기·수정(`GET /notes`, `GET·PUT /notes/:id`), 공지 읽기(`GET /notices`, `GET /notices/:id`) | `allow` · `approved` |
+| 7 | `device_registered` + `zone_own_notes` / `zone_notices_read` | 자기 메모 한 건 읽기·수정(`GET·PUT /notes/:id`), 공지 읽기(`GET /notices`, `GET /notices/:id`) | `allow` · `approved` |
 | (6번 기준) | `step_up_required` | 등록 기기의 읽기인데, 믿을 수 있는 가상 사건에서 **새벽 0~5시 + 처음 보는 네트워크 + 최근 10분 사건 수 합 10 이상**이 모두 겹침, 그리고 5분 안의 새 로그인 확인이 없음 | `step_up` · `step_up_required` (자료 없음, 다시 로그인 요구) |
 
 **구역 판단 보완 (8단계 재제출):** 경로 모양만이 아니라 엔진이 확인한 값을 함께 맞춥니다. ① 서비스: `/notes…`는 `service: "notes"`만, `/notices…`는 `notes`·`notices`만(다른 서비스의 같은 모양 경로는 `route_not_allowed`). ② 사용자: `:id`가 자기 `subjectId` 그대로이거나 `subjectId` 뒤에 구분자(`- _ : .`)로 이어지면 자기 자료, 같은 형식(같은 영문 접두어 `learner_a`·`learnerA`, 또는 같은 길이의 16진수 해시)인데 자기 것이 아니면 **다른 사용자 자료로 거부**. ③ 자원 ID 종류: 메모 경로의 ID에 공지 표시(`notice`·`announce`·`bulletin`·`공지`)가 있으면 공지 구역 규칙(읽기만, 수정 거부), 공지 경로에 메모 ID(`note…`)가 오면 거부. 모두 `deny` · `route_not_allowed`. 자료 API의 공지 수정은 어떤 ID든 DB 강사 권한부터 확인해 학생은 항상 `403`.
+
+**메모 목록 경로 닫기 (8단계 5차 보완):** 판정기는 메모 주인을 모르므로, 메모 목록 `GET /notes`를 열어 두면 여러 사람의 메모를 한꺼번에 여는 길이 됩니다. 판정기 구역 표에서 목록을 빼고 메모는 자료 ID 한 건씩만 허용합니다. `:id` 자리의 목록 이름(`list`, `index`, `everyone`, `users`, `shared`, `public` 등)도 기능 경로로 보고 거부합니다. `aleph.config.json`의 `allowedRoutes`에서도 `GET /api/notes`를 뺐습니다. (자료실 화면의 내 메모 목록은 엔진을 거치지 않는 서버 함수가 로그인 사용자의 `owner_id`로만 걸러 보여 줍니다.)
 
 **거부 이유 코드 (8단계 4차 보완):** 계약상 이유 코드는 운영 등록부(`allowedReasonCodes`)에 있어야 올바른 응답입니다. 등록 여부를 알 수 없는 새 코드(`zone_not_allowed`)를 쓰지 않고, 구역 거부도 모두 `route_not_allowed`로 돌려줍니다. 규칙 이름(`zone_own_notes`, `zone_notice_instructor_only` 등)으로 어느 구역 규칙인지 구별합니다.
 
 **자원 주인 기억 (8단계 3차 보완):** 판정기 요청에는 메모 주인 칸이 없으므로, 자기 메모 구역의 자료 ID를 처음 허용받은 사용자(`subjectId`)를 그 자료의 주인으로 기억합니다. 같은 자료 ID를 다른 사용자가 요청하면 `deny` · `route_not_allowed`. 기억은 같은 판정기 실행 안에서만 유지되며(최대 5000건), 최종 판단은 자료 API의 `owner_id` 대조가 맡습니다.
 
-**구역 표 (판정기 경로 모양):** `GET /notes`, `GET /notes/:id`, `PUT /notes/:id` → 자기 메모(`own_notes`) · `GET /notices`, `GET /notices/:id` → 공지 읽기 · `PUT /notices/:id` → 강사만. 판정기의 `subjectId`는 가명이라 메모 주인(`owner_id`)과 직접 비교하지 않으므로, **B가 A의 메모를 요청하는 경우는 최종 자료 API가 거부**합니다(아래).
+**구역 표 (판정기 경로 모양):** `GET /notes/:id`, `PUT /notes/:id` → 자기 메모(`own_notes`, 목록 `GET /notes`는 두지 않음) · `GET /notices`, `GET /notices/:id` → 공지 읽기 · `PUT /notices/:id` → 강사만. 판정기의 `subjectId`는 가명이라 메모 주인(`owner_id`)과 직접 비교하지 않으므로, **B가 A의 메모를 요청하는 경우는 최종 자료 API가 거부**합니다(아래).
 
 ### 입력 검사 (7단계)
 
