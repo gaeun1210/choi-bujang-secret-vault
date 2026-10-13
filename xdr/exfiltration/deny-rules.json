@@ -1,0 +1,90 @@
+{
+  "schema": "aleph.xdr.deny-rules.v1",
+  "moduleKey": "exfiltration",
+  "blockMinutes": 60,
+  "unit": "destination",
+  "rules": [
+    {
+      "ruleId": "xdr_exfiltration_destination_block",
+      "dstip": "203.0.113.50",
+      "createdAt": "2026-09-27T00:16:03.000Z",
+      "expiresAt": "2026-09-27T02:05:14.000Z",
+      "evidenceAlertIds": [
+        "ex-01",
+        "ex-03"
+      ],
+      "reason": "처음 보는 목적지로 대용량 전송 + 같은 목적지로 반복·다량 파일 전송 (T1048, 240MB) / 같은 목적지로 반복·다량 파일 전송 (T1041, 90MB)"
+    },
+    {
+      "ruleId": "xdr_exfiltration_destination_block",
+      "dstip": "198.51.100.40",
+      "createdAt": "2026-09-27T00:16:48.000Z",
+      "expiresAt": "2026-09-27T02:20:07.000Z",
+      "evidenceAlertIds": [
+        "ex-02",
+        "ex-04"
+      ],
+      "reason": "처음 보는 목적지로 대용량 전송 + 업무 시간 밖 압축 파일 반출 (T1048, 180MB) / 처음 보는 목적지로 대용량 전송 + 같은 목적지로 반복·다량 파일 전송 (T1048, 120MB)"
+    },
+    {
+      "ruleId": "xdr_exfiltration_destination_block",
+      "dstip": "203.0.113.55",
+      "createdAt": "2026-09-27T02:04:26.000Z",
+      "expiresAt": "2026-09-27T03:04:26.000Z",
+      "evidenceAlertIds": [
+        "ex-05"
+      ],
+      "reason": "처음 보는 목적지로 대용량 전송 + 같은 목적지로 반복·다량 파일 전송 (T1041, 70MB)"
+    },
+    {
+      "ruleId": "xdr_exfiltration_destination_block",
+      "dstip": "192.0.2.90",
+      "createdAt": "2026-09-27T03:02:19.000Z",
+      "expiresAt": "2026-09-27T04:02:19.000Z",
+      "evidenceAlertIds": [
+        "ex-06"
+      ],
+      "reason": "같은 목적지로 반복·다량 파일 전송 + 업무 시간 밖 압축 파일 반출 (T1048, 210MB)"
+    },
+    {
+      "ruleId": "xdr_exfiltration_destination_block",
+      "dstip": "198.51.100.45",
+      "createdAt": "2026-09-27T04:12:08.000Z",
+      "expiresAt": "2026-09-27T05:12:08.000Z",
+      "evidenceAlertIds": [
+        "ex-07"
+      ],
+      "reason": "처음 보는 목적지로 대용량 전송 + 업무 시간 밖 압축 파일 반출 (T1048, 150MB)"
+    },
+    {
+      "ruleId": "xdr_exfiltration_destination_block",
+      "dstip": "203.0.113.60",
+      "createdAt": "2026-09-27T05:03:41.000Z",
+      "expiresAt": "2026-09-27T06:03:41.000Z",
+      "evidenceAlertIds": [
+        "ex-08"
+      ],
+      "reason": "처음 보는 목적지로 대용량 전송 + 같은 목적지로 반복·다량 파일 전송 (T1041, 320MB)"
+    },
+    {
+      "ruleId": "xdr_exfiltration_destination_block",
+      "dstip": "203.0.113.61",
+      "createdAt": "2026-09-27T06:08:12.000Z",
+      "expiresAt": "2026-09-27T07:08:12.000Z",
+      "evidenceAlertIds": [
+        "ex-09"
+      ],
+      "reason": "처음 보는 목적지로 대용량 전송 + 같은 목적지로 반복·다량 파일 전송 (T1041, 80MB)"
+    },
+    {
+      "ruleId": "xdr_exfiltration_destination_block",
+      "dstip": "198.51.100.46",
+      "createdAt": "2026-09-27T07:01:05.000Z",
+      "expiresAt": "2026-09-27T08:01:05.000Z",
+      "evidenceAlertIds": [
+        "ex-10"
+      ],
+      "reason": "처음 보는 목적지로 대용량 전송 + 업무 시간 밖 압축 파일 반출 (T1048, 110MB)"
+    }
+  ]
+}

@@ -1,0 +1,57 @@
+{
+  "schema": "aleph.xdr.patterns.v1",
+  "moduleKey": "exfiltration",
+  "basis": "MITRE ATT&CK T1041 Exfiltration Over C2 Channel (https://attack.mitre.org/techniques/T1041/) · T1048 Exfiltration Over Alternative Protocol (https://attack.mitre.org/techniques/T1048/)",
+  "clearWhen": "T1041·T1048 경보 + 규칙 수준 10 이상 + 대용량 전송(50MB 이상) + 처음 보는 목적지·파일 다수·반복·업무 시간 밖·압축 파일 같은 신호 → 그 목적지를 막는 후보. 전송량이 작거나 실패·평소 목적지면 알림만.",
+  "patterns": [
+    {
+      "id": "t1048_t1041_bulk_to_new_destination",
+      "name": "처음 보는 목적지로 대용량 전송",
+      "strength": "strong",
+      "condition": {
+        "mitre": ["T1041", "T1048"],
+        "minBytes": 50000000,
+        "descriptionKeywords": ["처음 보는", "처음 봅니다", "외부 주소", "평소에 쓰지 않던"],
+        "description": "평소 목적지가 아닌 바깥 주소로 50MB 이상이 나가거나, 평소 쓰지 않던 포트·프로토콜로 자료가 연속으로 나감"
+      },
+      "evidence": "MITRE ATT&CK T1048: 공격자는 평소 쓰지 않는 프로토콜·목적지로 자료를 빼내 기존 감시를 피한다."
+    },
+    {
+      "id": "t1041_repeated_or_many_files",
+      "name": "같은 목적지로 반복·다량 파일 전송",
+      "strength": "strong",
+      "condition": {
+        "mitre": ["T1041", "T1048"],
+        "minBytes": 50000000,
+        "minRepeats": 5,
+        "minFiles": 50,
+        "descriptionKeywords": ["반복", "명령 통로", "전체"],
+        "description": "같은 목적지로 대용량 전송이 5번 이상 반복되거나 한 번에 파일 50개 이상(자료실 전체 복사 등)이 나감"
+      },
+      "evidence": "MITRE ATT&CK T1041: 공격자는 이미 열어 둔 명령 통로(C2)로 자료를 나눠 반복 전송해 빼낸다."
+    },
+    {
+      "id": "t1048_off_hours_archive",
+      "name": "업무 시간 밖 압축 파일 반출",
+      "strength": "strong",
+      "condition": {
+        "mitre": ["T1048"],
+        "minBytes": 50000000,
+        "descriptionKeywords": ["수업 시간 밖", "업무 시간 밖", "압축 파일"],
+        "description": "업무(수업) 시간 밖이거나 압축 파일 형태로 대용량이 바깥 주소에 올라감"
+      },
+      "evidence": "MITRE ATT&CK T1048: 유출 전에 자료를 압축해 묶고 감시가 느슨한 시간에 다른 경로로 내보내는 형태가 흔하다."
+    },
+    {
+      "id": "t1041_t1048_weak_transfer",
+      "name": "확인이 필요한 작은 외부 전송",
+      "strength": "weak",
+      "condition": {
+        "mitre": ["T1041", "T1048"],
+        "minLevel": 5,
+        "description": "전송량이 작거나(50MB 미만), 실패했거나, 평소 목적지의 소폭 증가, 외부 전송 전 압축처럼 신호가 약함. 알림만."
+      },
+      "evidence": "MITRE ATT&CK T1041·T1048: 같은 외부 전송 동작이 정상 업무(백업·자료 공유)에서도 생기므로, 대용량·낯선 목적지 신호가 없으면 막지 않고 사람이 확인하게 알린다."
+    }
+  ]
+}
