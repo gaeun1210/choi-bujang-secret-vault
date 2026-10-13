@@ -178,6 +178,11 @@ async function stepThreeChecks(config) {
         : `HTTP ${original.status} · 메모 ${rows ?? 0}건` });
   }
 
+  if (config.step >= 6) {
+    results.push({ attackId: 'unregistered_device_read', expected: '미등록 기기 요청은 판정기가 deny·device_not_registered',
+      observed: '미실행: 미등록 기기 공격은 심판이 반 엔진으로 보냄 (로컬 연습은 npm run decider:test)' });
+  }
+
   // 로그인이 필요한 점검은 비밀번호를 코드에 넣지 않기 위해 자동으로 보내지 않습니다.
   results.push({ attackId: 'login_a_crud', expected: '정상 A 로그인 뒤 자기 가상 메모 추가·수정·삭제 성공',
     observed: '미실행: 비밀번호를 코드에 넣지 않으므로 학생이 화면에서 직접 확인' });
@@ -196,6 +201,6 @@ async function stepThreeChecks(config) {
 export async function runAttackChecks(config) {
   if (config.step === 1) return stepOneChecks(config);
   if (config.step === 2) return stepTwoChecks(config);
-  if (config.step >= 3 && config.step <= 5) return stepThreeChecks(config);
+  if (config.step >= 3 && config.step <= 6) return stepThreeChecks(config);
   throw new Error('이 단계의 공격 점검을 src/attack-check.mjs에 구현해 주세요.');
 }

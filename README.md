@@ -12,7 +12,28 @@
 | 4단계 | `cc06beb` 「4단계 저장점」 | API가 확인된 사용자 ID와 DB `owner_id`를 비교해 읽기·추가·수정·삭제를 본인 메모로 제한, B 시험 메모 SQL, 메모 테이블 RLS·최소 권한 SQL 제안 |
 | 5단계 | `d323be8` 「5단계 저장점」 | 로그인·로그아웃도 서버 함수로 옮겨 화면 코드에서 Supabase 주소·공개 키·SDK 제거, 메모 테이블의 PUBLIC·anon·authenticated 직접 권한 회수 SQL, `originalApiUrl` 기록 |
 | 보너스 xdr-01 | `1dba0c2` 「보너스 xdr-01 저장점」 | 무차별 로그인 공격 탐지(T1110): 경보 읽기·패턴·판단·ZTNA 거부 규칙 부품·알림 로그 |
-| 보너스 xdr-02 | 「보너스 xdr-02 저장점」 | 웹 주입 공격 탐지(T1190): SQL 구문·스크립트 태그·경로 이탈 반복·명령 구분자 패턴, 판단·ZTNA 거부 규칙 부품·알림 로그 |
+| 보너스 xdr-02 | `a110fd6` 「보너스 xdr-02 저장점」 | 웹 주입 공격 탐지(T1190): SQL 구문·스크립트 태그·경로 이탈 반복·명령 구분자 패턴, 판단·ZTNA 거부 규칙 부품·알림 로그 |
+| 6단계 | 「6단계 저장점」 | 판정기 `src/decider.mjs`에 기기 등록 규칙 `device_registered` 추가: 등록 기기의 읽기만 허용, 미등록·값 없음은 `deny`·`device_not_registered` |
+
+## 판정기 (6단계)
+
+`src/decider.mjs`의 `decide(request)`는 반 엔진이 신원·기기·경로를 확인한 뒤 보낸 요청만 받습니다(계약: `docs/DECIDER_REQUEST.md`). 규칙 이름은 같은 파일의 `RULE_IDS`에 있습니다.
+
+| 규칙 | 조건 | 결과 |
+| --- | --- | --- |
+| `device_registered` | `request.deviceRegistered`가 정확히 `true`가 아니면(미등록 `false`, 값 없음 등) | `deny` · `device_not_registered` |
+| `device_registered` | 등록 기기이고 읽기 동작(`GET`·`HEAD`) | `allow` · `approved` |
+| `starter.deny` | 그 밖의 요청 | `deny` · `starter_not_ready` (시작 틀 기본 거부 그대로) |
+
+판단에는 요청에 담긴 기기 등록 여부와 동작만 씁니다. 브라우저가 보낸 사용자 번호·역할·기기 상태는 쓰지 않고, 인증서·CA·서명 키는 만들거나 저장소에 넣지 않습니다. 이번 과정에는 따로 설치할 접속 프로그램이 없습니다.
+
+### 확인 순서 (로컬 연습)
+
+1. 저장소 루트에서 `npm run decider:test`를 실행합니다.
+2. 출력에 `통과 · 등록 기기의 정상 요청`(→ `allow`)이 보이는지 확인합니다.
+3. 출력에 `통과 · 미등록 기기의 가상 요청`(→ `deny`·`device_not_registered`)이 보이는지 확인합니다.
+4. 이 명령은 가상 요청 연습이며 심판 판정이 아닙니다. 실제 미등록 기기 공격은 심판이 반 엔진으로 보내 확인합니다.
+5. 기존 자료실 화면(`/`)과 `/api/notes…` 서버 함수는 6단계에서 바뀌지 않았습니다. 로그인 후 메모가 보이는지 화면에서 확인합니다.
 
 ## 현재 작동하는 기능 (5단계)
 
