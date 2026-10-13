@@ -17,6 +17,19 @@ export default async function handler(request, response) {
 
   const raw = request.query?.id;
   const id = typeof raw === 'string' && UUID.test(raw) ? raw.toLowerCase() : null;
+
+  // 공지 수정은 어떤 ID를 보내든 먼저 DB의 강사 권한부터 확인합니다(학생은 항상 403).
+  if (method === 'PUT') {
+    try {
+      if (!(await isInstructor(userId))) {
+        logDenial('instructor_only', id ? resourceId('notice', id) : 'notice:?', userId);
+        return send(response, 403, { error: 'INSTRUCTOR_ONLY', message: '강사만 공지를 고칠 수 있습니다.' });
+      }
+    } catch (error) {
+      return dbFailure(response, error);
+    }
+  }
+
   if (!id) {
     logDenial('invalid_resource_id', 'notice:?', userId);
     return notFound(response);
@@ -31,10 +44,6 @@ export default async function handler(request, response) {
     const input = readBody(request);
     if (!input) return send(response, 400, { error: 'INVALID_JSON', message: 'JSON 객체를 보내 주세요.' });
     if (claimedRole(input)) logDenial('body_role_ignored', resource, userId);
-    if (!(await isInstructor(userId))) {
-      logDenial('instructor_only', resource, userId);
-      return send(response, 403, { error: 'INSTRUCTOR_ONLY', message: '강사만 공지를 고칠 수 있습니다.' });
-    }
     const notice = cleanNote(input, { partial: true });
     if (notice.error) return send(response, 400, { error: 'INVALID_NOTICE', message: notice.error });
     const updated = await notices.update(id, userId, notice.value);

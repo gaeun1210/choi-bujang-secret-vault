@@ -20,17 +20,34 @@ const ZONE_ROUTES = Object.freeze([
     services: ['notes', 'notices'] },
 ].map(Object.freeze));
 
-// 자원 ID 종류: 공지는 notice…, 메모는 note… 로 시작하는 ID를 씁니다(예: notice-1, note:…).
-// 메모 경로에 공지 ID가 오거나 공지 경로에 메모 ID가 오면 다른 구역 자원을 고른 것입니다.
-const NOTICE_ID = /^notices?(?:[-_:]|$)/iu;
-const NOTE_ID = /^notes?(?:[-_:]|$)/iu;
+// 자원 ID 종류: 강사 공지 자원은 ID 어디에든 notice·announce·bulletin·공지 표시가 있습니다(예: notice-1, class-notice).
+// 메모는 note… 로 시작합니다. 메모 경로에 공지 ID가 오거나 공지 경로에 메모 ID가 오면 다른 구역 자원을 고른 것입니다.
+const NOTICE_ID = /notice|announce|bulletin|공지/iu;
+const NOTE_ID = /^notes?(?:[-_:.]|$)/iu;
+const OWN_SUFFIX = /^[-_:.]/u;
+const GENERIC_PREFIXES = new Set(['note', 'notes', 'notice', 'notices', 'demo', 'test', 'user']);
 
-// 엔진이 확인한 사용자(subjectId)와 같은 형식(같은 영문 접두어, 예: learner_…)의 다른 주체 ID가
-// 자원 ID 자리에 오면, 다른 사용자의 자료를 고른 것입니다. 자기 subjectId 그대로면 자기 자료입니다.
+// 자원 ID가 "사용자 주체 ID 형식"인지: 엔진이 확인한 subjectId와 같은 영문 접두어(learner_a·learnerA → learner)
+// 이거나, subjectId가 해시(16자 이상 16진수)일 때 같은 길이의 16진수로 시작하는 경우.
+function subjectShaped(id, subjectId) {
+  const prefix = /^([a-z]{3,})/iu.exec(subjectId)?.[1]?.replace(/[A-Z].*$/u, '');
+  if (prefix && prefix.length >= 3 && !GENERIC_PREFIXES.has(prefix.toLowerCase())
+      && id.toLowerCase().startsWith(prefix.toLowerCase())) return true;
+  if (/^[0-9a-f]{16,}$/iu.test(subjectId)) {
+    const head = /^[0-9a-f]+/iu.exec(id)?.[0] ?? '';
+    return head.length >= subjectId.length;
+  }
+  return false;
+}
+
+// 자기 자료: 자원 ID가 자기 subjectId 그대로이거나 subjectId 뒤에 구분자(- _ : .)로 이어진 ID.
+// 다른 사용자 자료: 주체 ID 형식인데 자기 subjectId로 시작하지 않는 ID.
 function otherSubjectId(id, subjectId) {
-  if (typeof subjectId !== 'string' || id === subjectId) return false;
-  const prefix = /^([A-Za-z]+[_-])/u.exec(subjectId)?.[1];
-  return Boolean(prefix) && id.toLowerCase().startsWith(prefix.toLowerCase());
+  if (typeof subjectId !== 'string' || !subjectId) return false;
+  const lower = id.toLowerCase();
+  const own = subjectId.toLowerCase();
+  if (lower === own || (lower.startsWith(own) && OWN_SUFFIX.test(lower.slice(own.length)))) return false;
+  return subjectShaped(id, subjectId);
 }
 const RESOURCE_ID = /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/u;
 // 자료 ID 자리에 기능 이름이 오면 자료가 아니라 기능을 고르는 것이므로 거부합니다.

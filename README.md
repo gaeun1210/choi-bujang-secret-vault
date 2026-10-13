@@ -32,7 +32,7 @@
 | 7 | `device_registered` + `zone_own_notes` / `zone_notices_read` | 자기 메모 읽기·수정(`GET /notes`, `GET·PUT /notes/:id`), 공지 읽기(`GET /notices`, `GET /notices/:id`) | `allow` · `approved` |
 | (6번 기준) | `step_up_required` | 등록 기기의 읽기인데, 믿을 수 있는 가상 사건에서 **새벽 0~5시 + 처음 보는 네트워크 + 최근 10분 사건 수 합 10 이상**이 모두 겹침, 그리고 5분 안의 새 로그인 확인이 없음 | `step_up` · `step_up_required` (자료 없음, 다시 로그인 요구) |
 
-**구역 판단 보완 (8단계 재제출):** 경로 모양만이 아니라 엔진이 확인한 값을 함께 맞춥니다. ① 서비스: `/notes…`는 `service: "notes"`만, `/notices…`는 `notes`·`notices`만(다른 서비스의 같은 모양 경로는 `route_not_allowed`). ② 사용자: `:id` 자리에 자기 `subjectId`와 같은 형식(같은 영문 접두어, 예: `learner_…`)의 **다른** 주체 ID가 오면 다른 사용자의 자료로 보고 거부. ③ 자원 ID 종류: 메모 경로에 공지 ID(`notice…`)가 오면 공지 구역 규칙(읽기만, 수정은 거부), 공지 경로에 메모 ID(`note…`)가 오면 거부. 모두 `deny` · `zone_not_allowed`.
+**구역 판단 보완 (8단계 재제출):** 경로 모양만이 아니라 엔진이 확인한 값을 함께 맞춥니다. ① 서비스: `/notes…`는 `service: "notes"`만, `/notices…`는 `notes`·`notices`만(다른 서비스의 같은 모양 경로는 `route_not_allowed`). ② 사용자: `:id`가 자기 `subjectId` 그대로이거나 `subjectId` 뒤에 구분자(`- _ : .`)로 이어지면 자기 자료, 같은 형식(같은 영문 접두어 `learner_a`·`learnerA`, 또는 같은 길이의 16진수 해시)인데 자기 것이 아니면 **다른 사용자 자료로 거부**. ③ 자원 ID 종류: 메모 경로의 ID에 공지 표시(`notice`·`announce`·`bulletin`·`공지`)가 있으면 공지 구역 규칙(읽기만, 수정 거부), 공지 경로에 메모 ID(`note…`)가 오면 거부. 모두 `deny` · `zone_not_allowed`. 자료 API의 공지 수정은 어떤 ID든 DB 강사 권한부터 확인해 학생은 항상 `403`.
 
 **구역 표 (판정기 경로 모양):** `GET /notes`, `GET /notes/:id`, `PUT /notes/:id` → 자기 메모(`own_notes`) · `GET /notices`, `GET /notices/:id` → 공지 읽기 · `PUT /notices/:id` → 강사만. 판정기의 `subjectId`는 가명이라 메모 주인(`owner_id`)과 직접 비교하지 않으므로, **B가 A의 메모를 요청하는 경우는 최종 자료 API가 거부**합니다(아래).
 
