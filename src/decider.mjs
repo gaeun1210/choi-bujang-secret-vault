@@ -9,19 +9,34 @@ const READ_METHODS = new Set(['GET', 'HEAD']);
 
 // ── 8단계 구역 표: 엔진이 확인한 메서드 + 정확한 경로 모양만 허용합니다. 표에 없는 경로는 거부. ──
 // 경로는 자료 ID 하나만 고르고(쿼리로 기능을 고르지 않음), :id와 같은 깊이에 기능 경로를 두지 않습니다.
+// services: 그 경로를 받을 수 있는, 엔진이 확인한 서비스 이름. 다른 서비스의 같은 모양 경로는 다른 구역입니다.
 const ZONE_ROUTES = Object.freeze([
-  { method: 'GET', shape: '/notes', zone: 'own_notes', rule: 'zone_own_notes' },
-  { method: 'GET', shape: '/notes/:id', zone: 'own_notes', rule: 'zone_own_notes' },
-  { method: 'PUT', shape: '/notes/:id', zone: 'own_notes', rule: 'zone_own_notes' },
-  { method: 'GET', shape: '/notices', zone: 'notices', rule: 'zone_notices_read' },
-  { method: 'GET', shape: '/notices/:id', zone: 'notices', rule: 'zone_notices_read' },
-  { method: 'PUT', shape: '/notices/:id', zone: 'notices', rule: 'zone_notice_instructor_only', instructorOnly: true },
+  { method: 'GET', shape: '/notes', zone: 'own_notes', rule: 'zone_own_notes', services: ['notes'] },
+  { method: 'GET', shape: '/notes/:id', zone: 'own_notes', rule: 'zone_own_notes', services: ['notes'] },
+  { method: 'PUT', shape: '/notes/:id', zone: 'own_notes', rule: 'zone_own_notes', services: ['notes'] },
+  { method: 'GET', shape: '/notices', zone: 'notices', rule: 'zone_notices_read', services: ['notes', 'notices'] },
+  { method: 'GET', shape: '/notices/:id', zone: 'notices', rule: 'zone_notices_read', services: ['notes', 'notices'] },
+  { method: 'PUT', shape: '/notices/:id', zone: 'notices', rule: 'zone_notice_instructor_only', instructorOnly: true,
+    services: ['notes', 'notices'] },
 ].map(Object.freeze));
+
+// 자원 ID 종류: 공지는 notice…, 메모는 note… 로 시작하는 ID를 씁니다(예: notice-1, note:…).
+// 메모 경로에 공지 ID가 오거나 공지 경로에 메모 ID가 오면 다른 구역 자원을 고른 것입니다.
+const NOTICE_ID = /^notices?(?:[-_:]|$)/iu;
+const NOTE_ID = /^notes?(?:[-_:]|$)/iu;
+
+// 엔진이 확인한 사용자(subjectId)와 같은 형식(같은 영문 접두어, 예: learner_…)의 다른 주체 ID가
+// 자원 ID 자리에 오면, 다른 사용자의 자료를 고른 것입니다. 자기 subjectId 그대로면 자기 자료입니다.
+function otherSubjectId(id, subjectId) {
+  if (typeof subjectId !== 'string' || id === subjectId) return false;
+  const prefix = /^([A-Za-z]+[_-])/u.exec(subjectId)?.[1];
+  return Boolean(prefix) && id.toLowerCase().startsWith(prefix.toLowerCase());
+}
 const RESOURCE_ID = /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/u;
 // 자료 ID 자리에 기능 이름이 오면 자료가 아니라 기능을 고르는 것이므로 거부합니다.
 const FEATURE_WORDS = new Set(['export', 'import', 'download', 'backup', 'bulk', 'all', 'admin', 'search', 'dump', 'sync']);
 
-// 요청 경로가 구역 표의 한 줄과 정확히 맞으면 그 줄을, 아니면 null.
+// 요청 경로가 구역 표의 한 줄과 정확히 맞으면 그 줄(과 :id 값)을, 아니면 null.
 export function matchZoneRoute(request) {
   const method = request?.method === 'HEAD' ? 'GET' : request?.method;
   const { path, route, queryLength } = request ?? {};
@@ -30,14 +45,34 @@ export function matchZoneRoute(request) {
   const segments = path.split('/');                       // '/notes/abc' → ['', 'notes', 'abc']
   for (const entry of ZONE_ROUTES) {
     if (entry.method !== method || route !== `${request.method} ${entry.shape}`) continue;
+    if (!entry.services.includes(request.service)) continue;   // 엔진이 확인한 서비스가 맞아야 함
     const shape = entry.shape.split('/');
     if (shape.length !== segments.length || segments[0] !== '') continue;
     const ok = shape.every((part, index) => (part === ':id'
       ? RESOURCE_ID.test(segments[index]) && !FEATURE_WORDS.has(segments[index].toLowerCase())
       : part === segments[index]));
-    if (ok) return entry;
+    if (ok) return { ...entry, id: entry.shape.endsWith('/:id') ? segments.at(-1) : null };
   }
   return null;
+}
+
+// 8단계 구역 판단: 경로·서비스는 맞아도 자원이 다른 구역이면 그 구역의 규칙으로 바꿔 판단합니다.
+// 반환: { allow: boolean, rule }
+export function zoneVerdict(request, zone) {
+  if (zone.zone === 'own_notes' && zone.id) {
+    if (NOTICE_ID.test(zone.id)) {
+      // 메모 경로로 공지 자원을 고름 → 공지 구역 규칙(읽기만, 수정은 강사만)
+      return READ_METHODS.has(request.method)
+        ? { allow: true, rule: 'zone_notices_read' }
+        : { allow: false, rule: 'zone_notice_instructor_only' };
+    }
+    if (otherSubjectId(zone.id, request.subjectId)) return { allow: false, rule: 'zone_own_notes' };
+  }
+  if (zone.zone === 'notices' && zone.id && NOTE_ID.test(zone.id)) {
+    return { allow: false, rule: 'zone_own_notes' };   // 공지 경로로 메모 자원을 고름
+  }
+  if (zone.instructorOnly) return { allow: false, rule: zone.rule };
+  return { allow: true, rule: zone.rule };
 }
 
 // 7단계 step_up_required 기준 (가상 접속 사건 전용)
@@ -128,11 +163,13 @@ export async function decide(request) {
     return respond(request, 'deny', 'zone_not_allowed', [zone.rule]);
   }
 
-  // 8단계 zone_notice_instructor_only: 공지 수정은 강사만. 현재 계약에는 엔진이 확인한 강사 역할이 없으므로
-  // 브라우저 값으로 채우지 않고 모두 거부합니다(최종 자료 API도 DB의 강사 권한을 다시 확인).
-  if (zone.instructorOnly) return respond(request, 'deny', 'zone_not_allowed', [zone.rule]);
+  // 8단계 구역 규칙: 다른 사용자의 자원·다른 구역 자원·공지 수정은 거부.
+  // 공지 수정은 강사만인데, 현재 계약에는 엔진이 확인한 강사 역할이 없으므로 브라우저 값으로 채우지 않고 모두 거부합니다
+  // (최종 자료 API도 DB의 강사 권한을 다시 확인).
+  const verdict = zoneVerdict(request, zone);
+  if (!verdict.allow) return respond(request, 'deny', 'zone_not_allowed', [verdict.rule]);
 
-  const rules = ['device_registered', zone.rule];
+  const rules = ['device_registered', verdict.rule];
   // 읽기에는 7단계 step_up_required를 그대로 적용합니다.
   if (READ_METHODS.has(request.method) && unusualAccessReasons(request).length) {
     if (!freshStepUp(request)) {
