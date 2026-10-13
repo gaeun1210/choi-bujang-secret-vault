@@ -182,6 +182,10 @@ async function stepThreeChecks(config) {
     results.push({ attackId: 'unregistered_device_read', expected: '미등록 기기 요청은 판정기가 deny·device_not_registered',
       observed: '미실행: 미등록 기기 공격은 심판이 반 엔진으로 보냄 (로컬 연습은 npm run decider:test)' });
   }
+  if (config.step >= 9) {
+    results.push({ attackId: 'doppelganger_burst_revocation', expected: '복합 의심 사건만 propose_revocation(대상 기기·이유), 정상 기기 유지',
+      observed: '미실행: 실제 회수와 경과 시간은 심판이 반 엔진으로 가상 사건을 보내 확인 (로컬 연습은 npm run detect:test)' });
+  }
   if (config.step >= 8) {
     const notices = await tryFetch(new URL('/api/notices', app));
     results.push({ attackId: 'anonymous_notice_list', expected: '로그인 없이 공지 목록 요청 시 401 JSON',
@@ -214,6 +218,6 @@ async function stepThreeChecks(config) {
 export async function runAttackChecks(config) {
   if (config.step === 1) return stepOneChecks(config);
   if (config.step === 2) return stepTwoChecks(config);
-  if (config.step >= 3 && config.step <= 8) return stepThreeChecks(config);
+  if (config.step >= 3 && config.step <= 9) return stepThreeChecks(config);
   throw new Error('이 단계의 공격 점검을 src/attack-check.mjs에 구현해 주세요.');
 }
