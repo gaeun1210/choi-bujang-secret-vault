@@ -4,6 +4,11 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>BYTE BACK | 점령된 자료실</title>
+  <meta name="theme-color" content="#101a28">
+  <meta name="description" content="BYTE BACK 실습용 가상 자료실. 승인된 기기에서만 자료가 열립니다.">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" href="/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/icon.svg">
   <style>
     :root { color-scheme: dark; font-family: system-ui, sans-serif; }
     body { margin: 0; min-height: 100vh; background: #101a28; color: #ecf4ff; }
@@ -13,12 +18,19 @@
     h2 { font-size: 20px; margin: 30px 0 12px; }
     p { font-size: 17px; line-height: 1.7; color: #bfd0e5; }
     .notice { margin: 26px 0; padding: 18px; border: 1px solid #d07384; border-radius: 14px; color: #ffe3e8; background: #612a3544; }
+    .info { margin: 16px 0; padding: 14px 16px; border: 1px solid #51667c; border-radius: 12px; color: #bfd0e5; background: #13202f; font-size: 15px; line-height: 1.6; }
+    .offline { border-color: #c9a227; color: #fff3c4; background: #4d3d0a55; }
     .panel { margin: 22px 0; padding: 18px; border: 1px solid #51667c; border-radius: 14px; background: #162435; }
     ul { list-style: none; display: grid; gap: 12px; padding: 0; }
     li { border: 1px solid #51667c; border-radius: 14px; padding: 17px 19px; background: #1a2a3d; }
     strong { display: block; font-size: 18px; margin-bottom: 5px; }
     li span { color: #bfd0e5; white-space: pre-wrap; }
     code { color: #8ad8df; }
+    .code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 26px; letter-spacing: .12em; color: #8ad8df; }
+    .badge { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 13px; font-weight: 700; }
+    .badge.approved { background: #1f5a44; color: #c9f5e0; }
+    .badge.pending { background: #5a4a1f; color: #fff0c2; }
+    .badge.none, .badge.revoked, .badge.unavailable { background: #5a2430; color: #ffd6de; }
     form { display: grid; gap: 10px; }
     label { display: grid; gap: 4px; font-size: 14px; color: #bfd0e5; }
     input, textarea { font: inherit; color: #ecf4ff; background: #0d1622; border: 1px solid #51667c; border-radius: 10px; padding: 10px 12px; }
@@ -35,10 +47,11 @@
 </head>
 <body>
   <main>
-    <div class="eyebrow">BYTE BACK · 5단계 서버 한곳으로</div>
+    <div class="eyebrow">BYTE BACK · 11단계 나만의 접속 앱</div>
     <h1>점령된 자료실</h1>
-    <p>메모는 서버 함수(<code>/api/notes</code>)가 로그인 토큰을 확인하고, 요청한 사람이 그 메모의 주인일 때만 돌려줍니다. 아래 기록은 모두 실습을 위해 만든 가상 자료입니다.</p>
-    <div class="notice">5단계: 이 화면은 자료 저장소를 직접 부르지 않습니다. 로그인과 메모 요청은 모두 이 사이트의 서버 함수를 거치고, 서버가 로그인과 메모 주인을 확인합니다.</div>
+    <p>로그인한 뒤, <strong style="display:inline;font-size:inherit">서버가 이 기기를 승인한 경우에만</strong> 자료가 열립니다. 아래 기록은 모두 실습을 위해 만든 가상 자료입니다.</p>
+    <div class="info" id="install-info">이 자료실은 앱으로 설치할 수 있습니다. 다만 <b>앱을 설치했다는 사실만으로 기기 확인이 끝나지는 않습니다.</b> 기기 승인 여부는 서버가 정합니다.</div>
+    <div class="info offline" id="offline-info" hidden>지금 오프라인입니다. 오프라인에서는 자료를 보여 주지 않습니다(기기에 자료를 저장하지 않음). 연결되면 다시 시도해 주세요.</div>
 
     <section class="panel" id="login-panel">
       <h2 style="margin-top:0">로그인</h2>
@@ -52,7 +65,24 @@
 
     <section class="panel" id="session-panel" hidden>
       <p class="status" id="session-status"></p>
+      <p class="status">기기 승인 상태: <span class="badge none" id="device-badge">확인 중</span></p>
       <div class="row"><button type="button" class="ghost" id="logout">로그아웃</button></div>
+    </section>
+
+    <section class="panel" id="device-panel" hidden>
+      <h2 style="margin-top:0">이 기기 승인</h2>
+      <p class="status" id="device-message">이 기기는 아직 서버에서 승인되지 않아 자료를 보여 주지 않습니다.</p>
+      <p class="code" id="device-code" hidden></p>
+      <div class="info">
+        승인 방법: ① 아래 <b>승인 요청</b>을 누르면 기기 코드가 나옵니다. ② <b>첫 기기</b>는 관리자가 Supabase SQL Editor에서 그 코드를 승인하고,
+        두 번째 기기부터는 <b>이미 승인된 내 기기</b>의 자료실 화면에서 코드를 입력해 승인합니다. ③ <b>승인 상태 다시 확인</b>을 누릅니다.
+        이 화면의 버튼은 요청만 보내며, 버튼을 눌렀다고 권한이 생기지 않습니다.
+      </div>
+      <div class="row">
+        <button type="button" id="device-request">승인 요청</button>
+        <button type="button" class="ghost" id="device-refresh">승인 상태 다시 확인</button>
+      </div>
+      <p class="error" id="device-error" role="alert"></p>
     </section>
 
     <section id="notes-section" hidden>
@@ -69,50 +99,42 @@
         </form>
       </div>
       <ul id="notes" aria-live="polite"></ul>
+
+      <h2>내 다른 기기 승인</h2>
+      <div class="panel">
+        <form id="approve-form">
+          <label>다른 기기 화면에 나온 기기 코드 <input name="code" placeholder="XXXX-XXXX" maxlength="9" required autocomplete="off"></label>
+          <div class="row"><button type="submit">이 코드의 기기 승인</button></div>
+          <p class="status" id="approve-result" role="status"></p>
+        </form>
+      </div>
     </section>
 
     <p class="status" id="guest-status">로그인하지 않으면 자료가 보이지 않습니다.</p>
   </main>
 
   <script type="module">
-    // 5단계: 이 화면은 자료 저장소(Supabase) 주소·키를 모릅니다.
-    // 로그인·로그아웃·메모 요청은 모두 같은 사이트의 서버 함수(/api/…)로만 보냅니다.
-    const SESSION_KEY = 'byteback.session';
+    // 11단계: 이 화면은 토큰·기기 비밀값을 다루지 않습니다. 둘 다 서버가 HttpOnly 쿠키로만 주고받아
+    // 자바스크립트가 읽을 수 없고, 화면 코드는 브라우저의 어떤 저장 공간에도 값을 쓰지 않습니다.
+    // 승인 여부는 서버(/api/auth/session, /api/device/*)가 정하고, 자료 API도 승인된 기기에서만 자료를 돌려줍니다.
     const $ = selector => document.querySelector(selector);
-    const loginPanel = $('#login-panel');
-    const sessionPanel = $('#session-panel');
-    const notesSection = $('#notes-section');
-    const guestStatus = $('#guest-status');
     const list = $('#notes');
     const noteForm = $('#note-form');
-    let session = null;
     let editingId = null;
-
-    function saveSession(value) {
-      try {
-        if (value) sessionStorage.setItem(SESSION_KEY, JSON.stringify(value));
-        else sessionStorage.removeItem(SESSION_KEY);
-      } catch { /* 저장소를 못 쓰면 이 탭의 메모리에서만 유지 */ }
-    }
-
-    function loadSession() {
-      try {
-        const value = JSON.parse(sessionStorage.getItem(SESSION_KEY) ?? 'null');
-        if (value?.access_token && (!value.expires_at || value.expires_at * 1000 > Date.now())) return value;
-      } catch { /* 무시 */ }
-      return null;
-    }
+    let state = { loggedIn: false, email: null, device: { status: 'none', code: null } };
 
     async function api(path, options = {}) {
-      const headers = { Accept: 'application/json', ...(options.body ? { 'Content-Type': 'application/json' } : {}) };
-      if (session?.access_token) headers.Authorization = `Bearer ${session.access_token}`;
-      const response = await fetch(path, { ...options, headers, cache: 'no-store' });
+      const headers = { Accept: 'application/json', 'X-Vault-Request': '1',
+        ...(options.body ? { 'Content-Type': 'application/json' } : {}) };
+      const response = await fetch(path, { ...options, headers, credentials: 'same-origin', cache: 'no-store' });
       const data = await response.json().catch(() => null);
-      if (response.status === 401 && session) {
-        // 토큰이 만료되었거나 거부됨 → 로그인 화면으로
-        saveSession(null);
-        render(null);
-        throw new Error('로그인이 끝났습니다. 다시 로그인해 주세요.');
+      if (response.status === 401) {
+        state = { loggedIn: false, email: null, device: { status: 'none', code: null } };
+        render();
+      }
+      if (response.status === 403 && data?.error === 'DEVICE_NOT_APPROVED') {
+        state.device = { status: data.status ?? 'none', code: data.code ?? state.device.code };
+        render();
       }
       if (!response.ok) throw new Error(data?.message ?? `요청 실패 (HTTP ${response.status})`);
       return data;
@@ -179,19 +201,48 @@
       }
     }
 
-    function render(nextSession) {
-      session = nextSession;
-      const signedIn = Boolean(session);
-      loginPanel.hidden = signedIn;
-      sessionPanel.hidden = !signedIn;
-      notesSection.hidden = !signedIn;
-      guestStatus.hidden = signedIn;
-      if (signedIn) {
-        $('#session-status').textContent = `${session.email ?? '로그인한 사용자'} 계정으로 로그인했습니다.`;
-        loadNotes();
-      } else {
-        list.replaceChildren();
+    const DEVICE_TEXT = {
+      approved: ['승인됨', '이 기기는 서버에서 승인된 등록 기기입니다.'],
+      pending: ['승인 대기', '승인 요청을 보냈습니다. 승인되기 전에는 자료를 보여 주지 않습니다.'],
+      revoked: ['승인 취소됨', '이 기기의 승인이 취소되어 자료를 보여 주지 않습니다.'],
+      none: ['미승인', '이 기기는 아직 서버에서 승인되지 않아 자료를 보여 주지 않습니다.'],
+      unavailable: ['확인 불가', '승인 상태를 확인할 수 없어 자료를 보여 주지 않습니다.'],
+      engine_verified: ['엔진 확인', '이 요청의 기기는 반 엔진이 확인합니다.'],
+    };
+
+    function render() {
+      const { loggedIn, device } = state;
+      const approved = loggedIn && (device.status === 'approved' || device.status === 'engine_verified');
+      $('#login-panel').hidden = loggedIn;
+      $('#session-panel').hidden = !loggedIn;
+      $('#guest-status').hidden = loggedIn;
+      $('#device-panel').hidden = !loggedIn || approved;
+      $('#notes-section').hidden = !approved;
+      const [label, message] = DEVICE_TEXT[device.status] ?? DEVICE_TEXT.none;
+      $('#device-badge').textContent = label;
+      $('#device-badge').className = `badge ${device.status === 'engine_verified' ? 'approved' : device.status}`;
+      $('#device-message').textContent = message;
+      $('#device-code').hidden = !device.code;
+      $('#device-code').textContent = device.code ?? '';
+      $('#device-request').hidden = device.status === 'pending';
+      $('#session-status').textContent = `${state.email ?? '로그인한 사용자'} 계정으로 로그인했습니다.`;
+      if (!approved) {
+        list.replaceChildren();   // 승인 전에는 보호 자료를 화면에 두지 않음
         resetForm();
+      }
+    }
+
+    async function refreshSession({ loadData = true } = {}) {
+      try {
+        const data = await api('/api/auth/session');
+        state.loggedIn = Boolean(data?.loggedIn);
+        state.device = data?.device ?? { status: 'none', code: null };
+      } catch {
+        state.loggedIn = false;
+      }
+      render();
+      if (loadData && state.loggedIn && (state.device.status === 'approved' || state.device.status === 'engine_verified')) {
+        await loadNotes();
       }
     }
 
@@ -203,20 +254,18 @@
       button.disabled = true;
       try {
         const response = await fetch('/api/auth/login', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+          method: 'POST', credentials: 'same-origin', cache: 'no-store',
+          headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'X-Vault-Request': '1' },
           body: JSON.stringify({ email: form.email.value.trim(), password: form.password.value }),
-          cache: 'no-store',
         });
         const data = await response.json().catch(() => null);
-        if (!response.ok || !data?.accessToken) {
+        if (!response.ok || !data?.loggedIn) {
           $('#login-error').textContent = `로그인 실패: ${data?.message ?? `HTTP ${response.status}`}`;
           return;
         }
-        const next = { access_token: data.accessToken, expires_at: data.expiresAt, email: data.email };
-        saveSession(next);
+        state.email = data.email;
         form.reset();
-        render(next);
+        await refreshSession();
       } catch {
         $('#login-error').textContent = '로그인 실패: 서버에 연결하지 못했습니다.';
       } finally {
@@ -225,12 +274,35 @@
     });
 
     $('#logout').addEventListener('click', async () => {
-      const token = session?.access_token;
-      saveSession(null);
-      render(null);
-      if (token) {
-        // 화면은 바로 로그아웃하고, 서버에 세션 종료를 알립니다.
-        fetch('/api/auth/logout', { method: 'POST', headers: { Authorization: `Bearer ${token}` } }).catch(() => {});
+      try { await api('/api/auth/logout', { method: 'POST' }); } catch { /* 화면은 그대로 로그아웃 */ }
+      state = { loggedIn: false, email: null, device: { status: 'none', code: null } };
+      render();
+    });
+
+    $('#device-request').addEventListener('click', async () => {
+      $('#device-error').textContent = '';
+      try {
+        const data = await api('/api/device/request', { method: 'POST' });
+        state.device = { status: data.status, code: data.code };
+        render();
+        if (data.status === 'approved') await loadNotes();
+      } catch (error) {
+        $('#device-error').textContent = `승인 요청 실패: ${error.message}`;
+      }
+    });
+
+    $('#device-refresh').addEventListener('click', () => refreshSession());
+
+    $('#approve-form').addEventListener('submit', async event => {
+      event.preventDefault();
+      const form = event.currentTarget;
+      $('#approve-result').textContent = '';
+      try {
+        const data = await api('/api/device/approve', { method: 'POST', body: JSON.stringify({ code: form.code.value.trim() }) });
+        $('#approve-result').textContent = `기기 ${data.code} 를 승인했습니다. 그 기기에서 "승인 상태 다시 확인"을 누르세요.`;
+        form.reset();
+      } catch (error) {
+        $('#approve-result').textContent = `승인 실패: ${error.message}`;
       }
     });
 
@@ -257,7 +329,20 @@
       }
     });
 
-    render(loadSession());
+    // 오프라인 안내: 오프라인에서는 자료를 보여 주지 않습니다(서비스 워커도 자료 API를 저장하지 않음).
+    const updateOnline = () => {
+      $('#offline-info').hidden = navigator.onLine;
+      if (!navigator.onLine) list.replaceChildren();
+    };
+    window.addEventListener('online', () => { updateOnline(); refreshSession(); });
+    window.addEventListener('offline', updateOnline);
+    updateOnline();
+
+    // 설치형 웹앱: 서비스 워커는 화면 틀과 오프라인 안내만 저장하고 /api/ 응답은 저장하지 않습니다.
+    if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
+
+    render();
+    refreshSession();
   </script>
 </body>
 </html>

@@ -4,7 +4,7 @@
 // 4단계: 읽기·추가·수정·삭제 모두 "확인된 사용자 ID = DB의 owner_id"인 행만 다룹니다.
 // 남의 메모는 존재 여부도 알리지 않도록 '없음(404)'과 똑같이 거부합니다.
 import { readFileSync } from 'node:fs';
-import { createHash, randomUUID } from 'node:crypto';
+import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { createLoginVerifier } from './verify-login.mjs';
 
 export const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu;
@@ -27,8 +27,36 @@ export function send(response, status, body) {
   return response.status(status).json(body);
 }
 
-// 토큰이 없거나 검사에 실패하면 null. 성공하면 서버가 확인한 사용자 ID.
-export async function requireUser(request, response) {
+// ── 11단계: 쿠키 ─────────────────────────────────────────────
+// 로그인 토큰과 기기 비밀값은 HttpOnly 쿠키로만 브라우저에 둡니다(자바스크립트·브라우저 저장소에서 읽을 수 없음).
+export const SESSION_COOKIE = '__Host-vault_session';
+export const DEVICE_COOKIE = '__Host-vault_device';
+const UNSAFE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
+
+export function readCookies(request) {
+  const header = request.headers?.cookie;
+  const out = {};
+  if (typeof header !== 'string') return out;
+  for (const part of header.split(';')) {
+    const index = part.indexOf('=');
+    if (index < 1) continue;
+    const name = part.slice(0, index).trim();
+    const value = part.slice(index + 1).trim();
+    if (name && value && value.length <= 8192) out[name] = value;
+  }
+  return out;
+}
+
+export function setCookie(response, name, value, maxAgeSeconds) {
+  const cookie = `${name}=${value}; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=${Math.max(0, Math.floor(maxAgeSeconds))}`;
+  const existing = typeof response.getHeader === 'function' ? response.getHeader('Set-Cookie') : undefined;
+  const list = existing ? [].concat(existing) : [];
+  response.setHeader('Set-Cookie', [...list, cookie]);
+}
+
+// 토큰 검사: Authorization 헤더(심판·도구)나 HttpOnly 세션 쿠키(자료실 화면). 실패하면 null.
+// 쿠키로 들어온 쓰기 요청은 같은 사이트 화면만 붙이는 X-Vault-Request 헤더가 있어야 합니다(교차 사이트 요청 위조 방지).
+export async function requireLogin(request, response) {
   let verify;
   try {
     verify = loginVerifier();
@@ -38,13 +66,43 @@ export async function requireUser(request, response) {
     return null;
   }
   const header = request.headers?.authorization;
-  const login = await verify(typeof header === 'string' ? header : undefined).catch(() => null);
+  const cookieToken = readCookies(request)[SESSION_COOKIE];
+  const viaCookie = typeof header !== 'string' && typeof cookieToken === 'string';
+  const authorization = typeof header === 'string' ? header : viaCookie ? `Bearer ${cookieToken}` : undefined;
+  const login = await verify(authorization).catch(() => null);
   if (!login?.userId) {
     response.setHeader('WWW-Authenticate', 'Bearer');
     send(response, 401, { error: 'LOGIN_REQUIRED', message: '로그인이 필요합니다. 토큰이 없거나 확인되지 않았습니다.' });
     return null;
   }
-  return ownerKey(login);
+  if (viaCookie && UNSAFE_METHODS.has(request.method) && request.headers?.['x-vault-request'] !== '1') {
+    send(response, 403, { error: 'CSRF_CHECK_FAILED', message: '자료실 화면에서 보낸 요청만 받습니다.' });
+    return null;
+  }
+  return { owner: ownerKey(login), login, viaCookie, token: authorization.slice('Bearer '.length) };
+}
+
+// 자료 API용: 로그인 확인 + (학생 로그인이면) 이 기기가 서버에 승인된 등록 기기인지 확인.
+// 심판 토큰의 기기는 반 엔진과 판정기(deviceRegistered)가 확인하므로 여기서는 브라우저 기기 쿠키를 요구하지 않습니다.
+// 반환: 확인된 사용자(주인) 키 또는 null(이미 응답함).
+export async function requireUser(request, response, { device = true } = {}) {
+  const session = await requireLogin(request, response);
+  if (!session) return null;
+  if (!device || session.login.kind !== 'student') return session.owner;
+  let state;
+  try {
+    state = await deviceState(request, session.owner);
+  } catch {
+    send(response, 503, { error: 'DEVICE_CHECK_UNAVAILABLE', message: '기기 승인 상태를 확인할 수 없어 자료를 열지 않습니다.' });
+    return null;
+  }
+  if (state.status !== 'approved') {
+    logDenial('device_not_approved', `device:${state.code ?? '?'}`, session.owner);
+    send(response, 403, { error: 'DEVICE_NOT_APPROVED', status: state.status, code: state.code ?? null,
+      message: '이 기기는 아직 서버에서 승인되지 않았습니다. 승인 전에는 자료를 보여 주지 않습니다.' });
+    return null;
+  }
+  return session.owner;
 }
 
 // 메모 주인 키: 학생 로그인은 Supabase 사용자 ID 그대로.
@@ -264,6 +322,55 @@ export const notices = {
     return rows[0] ? toNotice(rows[0]) : null;
   },
 };
+
+// ── 11단계: 기기 승인 ────────────────────────────────────────
+// 브라우저의 기기 비밀값(HttpOnly 쿠키)의 sha256만 서버 DB(vault_devices)에 둡니다.
+// 상태(pending·approved·revoked)는 서버만 바꿉니다. 화면의 버튼은 "요청"만 할 수 있습니다.
+const DEVICE_SECRET = /^[A-Za-z0-9_-]{43}$/u;
+export const deviceHashOf = secret => createHash('sha256').update(`aleph-device:${secret}`, 'utf8').digest('hex');
+export const deviceCodeOf = hash => `${hash.slice(0, 4)}-${hash.slice(4, 8)}`.toUpperCase();
+export const DEVICE_CODE = /^[0-9A-F]{4}-[0-9A-F]{4}$/u;
+
+export function deviceSecretOf(request) {
+  const secret = readCookies(request)[DEVICE_COOKIE];
+  return typeof secret === 'string' && DEVICE_SECRET.test(secret) ? secret : null;
+}
+
+export async function deviceState(request, owner) {
+  const secret = deviceSecretOf(request);
+  if (!secret) return { status: 'none', code: null, deviceId: null };
+  const hash = deviceHashOf(secret);
+  const rows = await db(`?select=status,device_code&device_hash=eq.${hash}&owner_id=eq.${owner}&limit=1`, { table: 'vault_devices' });
+  return { status: rows[0]?.status ?? 'none', code: rows[0]?.device_code ?? deviceCodeOf(hash), deviceId: hash.slice(0, 16) };
+}
+
+// 승인 요청: 기기 비밀값이 없으면 새로 만들어 HttpOnly 쿠키로만 내려 주고, 대기(pending)로 등록합니다.
+export async function requestDevice(request, response, owner) {
+  let secret = deviceSecretOf(request);
+  if (!secret) {
+    secret = randomBytes(32).toString('base64url');
+    setCookie(response, DEVICE_COOKIE, secret, 365 * 24 * 60 * 60);
+  }
+  const hash = deviceHashOf(secret);
+  const code = deviceCodeOf(hash);
+  const rows = await db(`?select=status,device_code&device_hash=eq.${hash}&owner_id=eq.${owner}&limit=1`, { table: 'vault_devices' });
+  if (!rows[0]) {
+    await db('', { table: 'vault_devices', method: 'POST',
+      body: { device_hash: hash, owner_id: owner, device_code: code, status: 'pending' } });
+    await audit('device_request', `device:${code}`, owner, {});
+    return { status: 'pending', code, deviceId: hash.slice(0, 16) };
+  }
+  return { status: rows[0].status, code: rows[0].device_code, deviceId: hash.slice(0, 16) };
+}
+
+// 다른 기기 승인: 이미 승인된 기기에서, 같은 사용자의 대기 중인 기기 코드 한 건만 승인합니다.
+export async function approveDevice(owner, code, approverCode) {
+  const rows = await db(`?device_code=eq.${code}&owner_id=eq.${owner}&status=eq.pending&select=device_code,status`, {
+    table: 'vault_devices', method: 'PATCH', prefer: 'return=representation',
+    body: { status: 'approved', approved_at: new Date().toISOString(), approved_via: `device:${approverCode}` } });
+  if (rows.length) await audit('device_approve', `device:${code}`, owner, { via: `device:${approverCode}` });
+  return rows.length > 0;
+}
 
 export function dbFailure(response, error) {
   if (error?.status === 409) return send(response, 409, { error: 'ID_CONFLICT', message: '이미 있는 id입니다.' });

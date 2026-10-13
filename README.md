@@ -17,7 +17,8 @@
 | 7단계 | `0edf640` 「7단계 저장점」 | 판정기 입력 검사(접속 정보는 엔진의 가상 사건 출처일 때만 신뢰) + 규칙 `step_up_required`: 새벽 시각·처음 보는 네트워크·갑작스러운 대량 읽기가 겹치면 다시 로그인 요구 |
 | 8단계 | `885f310` 「8단계 저장점」 | 자원 구역 나누기: 메모(`note:`)·강사 공지(`notice:`) 자원 ID, 판정기 구역 규칙(정확한 메서드·경로 허용 목록), 자료 API의 소유자·DB 강사 권한 재확인, 공지 테이블 SQL |
 | 9단계 | `df9422b` 「9단계 저장점」 | 탐지 함수 `src/detect.mjs`: 가상 사건 입력 정리, 평소와 다른 네트워크 + 다량 조회 탐지, 별도 결과로 `propose_revocation` 제안 |
-| 10단계 | 「10단계 저장점」 | 백업에서 되살리기: 검증한 안전 정책 사본과 차이 보기·확인 후 되돌리기(감사 기록 덧붙이기), 비공개 메모 사본과 본인 메모 한 건 복원 `POST /api/restore/:id` |
+| 10단계 | `f149579` 「10단계 저장점」 | 백업에서 되살리기: 검증한 안전 정책 사본과 차이 보기·확인 후 되돌리기(감사 기록 덧붙이기), 비공개 메모 사본과 본인 메모 한 건 복원 `POST /api/restore/:id` |
+| 11단계 | 「11단계 저장점」 | 나만의 접속 앱: 설치형 웹앱(manifest·아이콘·오프라인 안내), 기기 승인 요청·상태 화면, 서버가 승인한 기기에서만 자료 열기, 토큰·기기 비밀값은 HttpOnly 쿠키로만 |
 
 ## 판정기 (6~8단계)
 
@@ -57,6 +58,17 @@
 2. `npm run fixture:7` → `정상 사건: allow`, `복합 이상 사건: step_up`
 3. 이 명령들은 가상 요청 연습이며 심판 판정이 아닙니다. 다시 로그인 전 자료 차단과 새 요청 허용의 실측은 재로그인 계약(`stepUp`)을 검증하는 반 엔진이 있는 환경에서 심판이 합니다(이 저장소의 자기 점검에는 미실행으로 기록).
 4. 이번 과정에는 따로 설치할 접속 프로그램이 없습니다. 인증서·CA·키는 만들지 않았고, 자료실 화면(`/`)과 `/api/notes…`는 바뀌지 않았습니다.
+
+## 나만의 접속 앱과 기기 승인 (11단계)
+
+따로 설치하는 접속 프로그램은 없습니다. 지금 배포 중인 자료실(`/`)을 설치형 웹앱으로 다듬었습니다.
+
+- **설치형 웹앱:** `public/manifest.webmanifest`(앱 이름 「BYTE BACK 자료실」, `standalone`), `public/icon.svg`, `public/offline.html`(오프라인 안내), `public/sw.js`(서비스 워커는 오프라인 안내·아이콘·manifest만 저장하고 `/api/` 요청과 응답은 저장하지 않음). 화면에 "앱을 설치했다는 사실만으로 기기 확인이 끝나지는 않습니다"라고 표시합니다.
+- **토큰·기기 비밀값 위치:** 로그인 토큰은 `__Host-vault_session`, 기기 비밀값은 `__Host-vault_device` **HttpOnly·Secure·SameSite=Strict 쿠키**로만 오갑니다. 화면 코드는 두 값을 읽을 수 없고, 브라우저의 어떤 저장 공간에도 쓰지 않습니다(5단계에서 쓰던 세션 저장 방식은 없앰). 로그인 응답 본문에도 토큰이 없습니다. 쿠키로 들어온 쓰기 요청은 화면이 붙이는 `X-Vault-Request: 1` 헤더가 있어야 합니다(교차 사이트 요청 위조 방지).
+- **기기 승인 흐름:** 로그인 → 「승인 요청」(`POST /api/device/request`) → 서버가 기기 비밀값의 sha256만 `vault_devices`에 **대기(pending)**로 저장하고 기기 코드(`XXXX-XXXX`)를 보여 줌 → **첫 기기는 관리자가 Supabase SQL Editor에서**(`supabase/step11-devices.sql` [다]), 두 번째 기기부터는 **이미 승인된 내 기기**의 화면에서 코드로 승인(`POST /api/device/approve`) → 「승인 상태 다시 확인」(`GET /api/auth/session`). 승인되지 않은 기기는 승인 요청을 보낼 수 없어 스스로를 승인할 수 없습니다. 승인 기록은 `vault_audit`에 덧붙입니다.
+- **승인 전에는 자료 없음:** 학생 로그인으로 들어온 자료 API(`/api/notes…`, `/api/notices…`, `/api/restore/:id`)는 서버가 이 기기를 승인된 등록 기기로 확인한 뒤에만 자료를 돌려주고, 아니면 `403 DEVICE_NOT_APPROVED`입니다. 화면도 승인 전에는 자료 영역을 숨기고 비웁니다.
+- **심판·도구 요청:** `Authorization` 헤더로 오는 심판 토큰의 기기는 반 엔진과 판정기(`deviceRegistered`, 6단계 `device_registered`)가 확인하므로, 브라우저 기기 쿠키를 요구하지 않습니다. 1~10단계의 정상·거부 결과(무로그인 401, 남의 메모 404, 공지 수정 403, 복원 등)는 그대로입니다.
+- **DB 준비 (검토 후 한 번):** `supabase/step11-devices.sql` [가] → [나](anon·authenticated 권한 false, RLS true). 첫 기기 승인은 화면에 나온 코드로 [다]를 실행합니다.
 
 ## 백업에서 되살리기 (10단계)
 
@@ -119,7 +131,7 @@
 ## 현재 작동하는 기능 (5단계)
 
 1. **브라우저는 이 사이트의 서버 함수만 부릅니다.** 로그인 `POST /api/auth/login`, 로그아웃 `POST /api/auth/logout`, 메모 `/api/notes…`. 화면 코드에는 Supabase 주소·공개 키(`sb_publishable_…`)·SDK가 없습니다. (점검: 브라우저 메모 자료 직접 호출은 4단계 때도 **없음**이었고, 로그인 직접 호출만 이번에 서버로 옮김)
-2. 로그인 서버 함수는 공식 SDK(`supabase-js`의 `signInWithPassword`)로 Supabase Auth를 부르고 access token만 돌려줍니다(refresh token은 주지 않음, 만료되면 다시 로그인). 실패 이유는 화면에 보여 줍니다. 토큰은 그 탭의 `sessionStorage`에만 둡니다.
+2. 로그인 서버 함수는 공식 SDK(`supabase-js`의 `signInWithPassword`)로 Supabase Auth를 부르고 access token을 HttpOnly 세션 쿠키로만 내려 줍니다(11단계부터, refresh token은 주지 않음, 만료되면 다시 로그인). 실패 이유는 화면에 보여 줍니다. 화면 코드는 토큰을 읽거나 저장하지 않습니다.
 3. 자료 API는 `src/verify-login.mjs`로 토큰을 검사(없거나 틀리면 401 JSON)하고, 확인된 사용자 ID와 DB `owner_id`를 비교해 본인 메모만 읽기·추가·수정·삭제합니다(남의 메모 404, 소유자 변경 403 — 4단계와 같음).
 4. 학습 DB의 메모 테이블은 `step5-revoke.sql`로 PUBLIC·anon·authenticated 직접 권한을 모두 회수합니다. 원본 자료 주소(`originalApiUrl`)를 공개 키로 직접 불러도 메모를 받을 수 없고, 서버 전용 키(service_role)를 가진 서버 함수만 접근합니다.
 5. `/data.json` 404, `/aleph.json` 자동 생성(이제 `allowedRoutes`·`originalApiUrl` 포함), 모든 응답에 `nosniff` 등 보안 헤더.
@@ -154,7 +166,7 @@
 
 - **한 곳으로 모음:** 자료 요청은 브라우저 → Vercel 서버 함수 → Supabase 한 길뿐입니다. 서버 함수가 로그인(토큰 검사)과 소유자 검사를 모두 맡습니다.
 - **원본 잠금:** 메모 테이블에 PUBLIC·anon·authenticated 권한이 없으므로, 앱 코드에서 주소와 공개 키를 알아내도 Data API로 메모를 읽거나 고칠 수 없습니다. 4단계의 RLS 정책 4개는 실수로 권한이 다시 열릴 때를 대비한 안전장치로 남겨 둡니다.
-- **남은 한계:** 서버 전용 키가 새면 모든 방어를 우회하므로 키는 Vercel 환경변수에만 둡니다. 로그인 시도 횟수 제한은 Supabase Auth 기본 제한에 맡깁니다. access token은 탭의 `sessionStorage`에 있으므로 화면에 스크립트 삽입(XSS)이 생기면 토큰이 샐 수 있습니다(화면은 `textContent`만 써서 막아 둠).
+- **남은 한계:** 서버 전용 키가 새면 모든 방어를 우회하므로 키는 Vercel 환경변수에만 둡니다. 로그인 시도 횟수 제한은 Supabase Auth 기본 제한에 맡깁니다. 11단계부터 access token은 HttpOnly 쿠키에만 있어 화면 스크립트가 읽을 수 없습니다. 그래도 화면에 스크립트 삽입(XSS)이 생기면 같은 화면에서 요청을 보낼 수는 있으므로 화면은 `textContent`만 써서 막아 둡니다.
 
 ## 보너스 xdr-01 무차별 로그인 공격 탐지 (`xdr/brute-force/`)
 
