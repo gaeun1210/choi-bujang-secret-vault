@@ -1,0 +1,97 @@
+{
+  "schema": "aleph.xdr.deny-rules.v1",
+  "moduleKey": "privilege",
+  "revokeMinutes": 60,
+  "unit": "user+srcip session",
+  "rules": [
+    {
+      "ruleId": "xdr_privilege_session_revoke",
+      "user": "user01",
+      "srcip": "203.0.113.11",
+      "createdAt": "2026-09-27T00:15:06.000Z",
+      "expiresAt": "2026-09-27T01:15:40.000Z",
+      "evidenceAlertIds": [
+        "pv-01",
+        "pv-02"
+      ],
+      "reason": "관리자 그룹 추가 + 업무 시간 밖·처음 보는 곳의 권한 사용 (T1078) / 처음 보는 관리자 명령 + 업무 시간 밖·처음 보는 곳의 권한 사용 (T1068·T1078)"
+    },
+    {
+      "ruleId": "xdr_privilege_session_revoke",
+      "user": "user02",
+      "srcip": "198.51.100.11",
+      "createdAt": "2026-09-27T01:03:12.000Z",
+      "expiresAt": "2026-09-27T02:03:12.000Z",
+      "evidenceAlertIds": [
+        "pv-03"
+      ],
+      "reason": "처음 보는 관리자 명령 + 업무 시간 밖·처음 보는 곳의 권한 사용 (T1068)"
+    },
+    {
+      "ruleId": "xdr_privilege_session_revoke",
+      "user": "user03",
+      "srcip": "192.0.2.11",
+      "createdAt": "2026-09-27T01:19:08.000Z",
+      "expiresAt": "2026-09-27T02:19:08.000Z",
+      "evidenceAlertIds": [
+        "pv-04"
+      ],
+      "reason": "관리자 그룹 추가 + 처음 보는 관리자 명령 + 업무 시간 밖·처음 보는 곳의 권한 사용 (T1078)"
+    },
+    {
+      "ruleId": "xdr_privilege_session_revoke",
+      "user": "user04",
+      "srcip": "203.0.113.17",
+      "createdAt": "2026-09-27T02:06:21.000Z",
+      "expiresAt": "2026-09-27T03:06:21.000Z",
+      "evidenceAlertIds": [
+        "pv-05"
+      ],
+      "reason": "관리자 그룹 추가 (T1078)"
+    },
+    {
+      "ruleId": "xdr_privilege_session_revoke",
+      "user": "user05",
+      "srcip": "198.51.100.17",
+      "createdAt": "2026-09-27T04:08:02.000Z",
+      "expiresAt": "2026-09-27T05:08:02.000Z",
+      "evidenceAlertIds": [
+        "pv-06"
+      ],
+      "reason": "처음 보는 관리자 명령 + 업무 시간 밖·처음 보는 곳의 권한 사용 (T1068)"
+    },
+    {
+      "ruleId": "xdr_privilege_session_revoke",
+      "user": "user06",
+      "srcip": "192.0.2.17",
+      "createdAt": "2026-09-27T05:16:29.000Z",
+      "expiresAt": "2026-09-27T06:16:29.000Z",
+      "evidenceAlertIds": [
+        "pv-07"
+      ],
+      "reason": "관리자 그룹 추가 + 처음 보는 관리자 명령 + 업무 시간 밖·처음 보는 곳의 권한 사용 (T1068·T1078)"
+    },
+    {
+      "ruleId": "xdr_privilege_session_revoke",
+      "user": "user07",
+      "srcip": "203.0.113.27",
+      "createdAt": "2026-09-27T06:02:18.000Z",
+      "expiresAt": "2026-09-27T07:02:18.000Z",
+      "evidenceAlertIds": [
+        "pv-08"
+      ],
+      "reason": "처음 보는 관리자 명령 + 업무 시간 밖·처음 보는 곳의 권한 사용 (T1068)"
+    },
+    {
+      "ruleId": "xdr_privilege_session_revoke",
+      "user": "user08",
+      "srcip": "198.51.100.27",
+      "createdAt": "2026-09-27T06:33:07.000Z",
+      "expiresAt": "2026-09-27T07:33:07.000Z",
+      "evidenceAlertIds": [
+        "pv-09"
+      ],
+      "reason": "관리자 그룹 추가 (T1078)"
+    }
+  ]
+}
