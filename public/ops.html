@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>BYTE BACK | 탈환 작전실</title>
+  <meta name="theme-color" content="#101a28">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" href="/icon.svg" type="image/svg+xml">
+  <style>
+    :root { color-scheme: dark; font-family: system-ui, sans-serif; }
+    body { margin: 0; min-height: 100vh; background: #101a28; color: #ecf4ff; }
+    main { max-width: 1080px; margin: 0 auto; padding: 36px 20px 64px; }
+    .eyebrow { color: #8ad8df; font-size: 14px; font-weight: 700; letter-spacing: .08em; }
+    h1 { margin: 12px 0; font-size: clamp(28px, 6vw, 42px); }
+    h2 { font-size: 19px; margin: 30px 0 10px; }
+    p, li { color: #bfd0e5; line-height: 1.6; }
+    a { color: #8ad8df; }
+    .info { margin: 14px 0; padding: 12px 14px; border: 1px solid #51667c; border-radius: 12px; background: #13202f; color: #bfd0e5; font-size: 15px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; }
+    .card { border: 1px solid #51667c; border-radius: 14px; padding: 14px 16px; background: #162435; }
+    .card h3 { margin: 0 0 6px; font-size: 15px; color: #8ad8df; }
+    .big { font-size: 28px; font-weight: 800; margin: 4px 0; }
+    .muted { color: #8fa3ba; font-size: 13px; }
+    table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+    th, td { border-bottom: 1px solid #2b3d52; padding: 7px 8px; text-align: left; vertical-align: top; }
+    th { color: #8ad8df; font-weight: 700; position: sticky; top: 0; background: #101a28; }
+    .scroll { overflow-x: auto; border: 1px solid #2b3d52; border-radius: 12px; }
+    .ok { color: #9be8c4; font-weight: 700; }
+    .bad { color: #ffb3c0; font-weight: 700; }
+    .skip { color: #f5d98b; font-weight: 700; }
+    code { color: #8ad8df; font-size: 12.5px; word-break: break-all; }
+    button { font: inherit; font-weight: 700; cursor: pointer; color: #101a28; background: #8ad8df; border: 0; border-radius: 10px; padding: 9px 14px; }
+    button.ghost { color: #ecf4ff; background: transparent; border: 1px solid #51667c; }
+    button:disabled { opacity: .5; cursor: wait; }
+    .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 10px 0; }
+    [hidden] { display: none !important; }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="eyebrow">BYTE BACK · 12단계 탈환 작전실</div>
+    <h1>탈환 작전실</h1>
+    <p>판정기 규칙, 탐지, 회수(기기 승인·취소), 복구 버전, 거부 기록을 <b>서버가 실제로 돌려준 응답</b>으로만 보여 줍니다. 실제 응답이 없는 항목은 계산해 채우지 않고 미실행으로 둡니다. 화면의 성공 문구는 통과 근거가 아닙니다. 가상 메모 본문은 표시하지 않습니다.</p>
+    <p><a href="/">← 자료실로 돌아가기</a></p>
+
+    <div class="info" id="gate">로그인과 기기 승인 상태를 확인하는 중입니다.</div>
+
+    <section id="ops" hidden>
+      <div class="row">
+        <button type="button" id="reload">요약 다시 읽기</button>
+        <span class="muted" id="summary-meta"></span>
+      </div>
+      <div class="grid" id="cards"></div>
+      <div class="info" id="sources"></div>
+      <div class="info" id="consistency"></div>
+
+      <h2>가린 서버 기록 — 기기(회수 상태)</h2>
+      <div class="scroll"><table><thead><tr><th>기기</th><th>상태</th><th>승인 경로</th><th>요청 시각</th><th>승인 시각</th></tr></thead><tbody id="device-records"></tbody></table></div>
+
+      <h2>가린 서버 기록 — 거부(최근 50건, 모든 요청)</h2>
+      <div class="scroll"><table><thead><tr><th>시각</th><th>누구</th><th>거부 코드</th><th>자원·경로(가림)</th><th>점검(attackId)</th><th>요청 ID</th><th>진단: 요청에 붙은 표시</th></tr></thead><tbody id="deny-records"></tbody></table></div>
+
+      <h2>가린 서버 기록 — 작전실 요약 조회(최근 20건, 모든 사용자)</h2>
+      <div class="scroll"><table><thead><tr><th>시각</th><th>누구(앞 4자리)</th></tr></thead><tbody id="view-records"></tbody></table></div>
+
+      <h2>가린 서버 기록 — 감사(최근 50건, 내 기록)</h2>
+      <div class="scroll"><table><thead><tr><th>시각</th><th>행동</th><th>자원(가림)</th></tr></thead><tbody id="audit-records"></tbody></table></div>
+
+      <h2>1~11단계 정상·금지 요청 실측표</h2>
+      <p class="muted">「실측 실행」을 누르면 이 화면에서 실제 API로 요청을 보내 기대 결과와 비교합니다. 로그인 없이 보내는 줄은 쿠키 없이 보냅니다. 판정기·탐지(엔진 필요)와 복원(내용이 바뀜)은 자동으로 보내지 않고 <b>미실행</b>으로 둡니다. 메모 내용은 기록하지 않습니다.</p>
+      <div class="row">
+        <button type="button" id="run">실측 실행</button>
+        <button type="button" class="ghost" id="copy" disabled>표 JSON 복사</button>
+        <span class="muted" id="matrix-meta"></span>
+      </div>
+      <div class="scroll"><table><thead><tr><th>단계</th><th>구분</th><th>요청</th><th>기대</th><th>실제 API 결과</th><th>판정</th><th>요청 ID</th><th>확인 시각</th><th>비고</th></tr></thead><tbody id="matrix"></tbody></table></div>
+      <p class="info" id="final-41"></p>
+    </section>
+  </main>
+
+  <script type="module">
+    import { CHECKS, runChecks, summarize } from '/ops-checks.mjs';
+    const $ = s => document.querySelector(s);
+    const cell = (text, className) => { const td = document.createElement('td'); td.textContent = text ?? '-'; if (className) td.className = className; return td; };
+    const rowOf = cells => { const tr = document.createElement('tr'); tr.append(...cells); return tr; };
+    const time = value => (value ? new Date(value).toLocaleString('ko-KR') : '-');
+    const sum = obj => Object.values(obj ?? {}).reduce((a, b) => a + b, 0);
+    let lastMatrix = null;
+
+    async function getJson(path) {
+      const response = await fetch(path, { credentials: 'same-origin', cache: 'no-store', headers: { Accept: 'application/json', 'X-Vault-Request': '1' } });
+      return { response, data: await response.json().catch(() => null) };
+    }
+
+    function card(title, big, lines) {
+      const div = document.createElement('div');
+      div.className = 'card';
+      const h = document.createElement('h3'); h.textContent = title;
+      const b = document.createElement('div'); b.className = 'big'; b.textContent = big;
+      div.append(h, b);
+      for (const line of lines) { const p = document.createElement('div'); p.className = 'muted'; p.textContent = line; div.append(p); }
+      return div;
+    }
+
+    async function loadSummary() {
+      $('#summary-meta').textContent = '읽는 중…';
+      const { response, data } = await getJson('/api/ops/summary');
+      if (!response.ok || !data) {
+        $('#summary-meta').textContent = `요약을 읽지 못했습니다 (HTTP ${response.status}${data?.error ? ` ${data.error}` : ''})`;
+        return;
+      }
+      const requestId = response.headers.get('x-vercel-id');
+      $('#summary-meta').textContent = `서버 응답 ${time(data.checkedAt)} · 커밋 ${data.commit ?? '-'} · 요청 ID ${requestId ?? '-'}`;
+      const rev = data.revocation; const rec = data.recovery; const den = data.denials;
+      const match = data.decider.policyMatchesBackup;
+      $('#cards').replaceChildren(
+        card('학생 판정기 규칙', String(data.decider.ruleIds.length), [`정책 ${data.decider.policyVersion} · 사본과 ${match === null ? '대조 미실행' : match ? 'sha256 같음' : 'sha256 다름'} (배포 ${rec.policyBackup?.currentSha256 ?? '-'} / 사본 ${rec.policyBackup?.sha256 ?? '-'})`, data.decider.ruleIds.join(', '), `실제 판정: ${data.decider.liveDecisions}`]),
+        card('탐지 규칙', String(data.detection.ruleIds.length), [data.detection.ruleIds.join(', '), `사건: ${data.detection.events}`]),
+        card('회수 상태 (내 기기)', `${rev.count}대`, [`승인 ${rev.byStatus.approved ?? 0} · 대기 ${rev.byStatus.pending ?? 0} · 취소(회수) ${rev.byStatus.revoked ?? 0}`, `출처 ${rev.source}`]),
+        card('복구 버전', rec.policyBackup?.version ?? '사본 없음', [`정책 사본 sha256 ${rec.policyBackup?.sha256 ?? '-'}`, `메모 사본 ${rec.count}건 (메모 ${rec.notesCovered}개) · 내 메모 ${data.notes.count}개`, `복원 실행 ${rec.restores}회 (감사 기록 기준)`]),
+        card('거부 기록', `${den.count}건`, [`로그인 없음 ${den.byWho['로그인 없음'] ?? 0} · 나 ${den.byWho['나'] ?? 0} · 다른 사용자 ${den.records.filter(r => r.who.startsWith('다른 사용자')).length}`, Object.entries(den.byCode).map(([k, v]) => `${k} ${v}`).join(' · ') || '없음', `점검 요청 ${sum(den.byAttack)}건`, den.limited ? '최근 50건까지만 셈' : '전체']),
+        card('감사 기록 (내 것)', `${data.audit.count}건`, [Object.entries(data.audit.byAction).map(([k, v]) => `${k} ${v}`).join(' · ') || '없음', data.audit.limited ? '최근 50건까지만 셈' : '전체']),
+      );
+      $('#device-records').replaceChildren(...(rev.records.length ? rev.records.map(r => rowOf([cell(r.device), cell(r.status), cell(r.approvedVia), cell(time(r.createdAt)), cell(time(r.approvedAt))]))
+        : [rowOf([cell('기록 없음')])]));
+      $('#deny-records').replaceChildren(...(den.records.length ? den.records.map(r => rowOf([cell(time(r.at)), cell(r.who), cell(r.code), cell(r.resource), cell(r.attackId ?? '-'), cell(r.requestId ?? '-'), cell(r.seen ?? '-')]))
+        : [rowOf([cell('기록 없음')])]));
+      const views = data.views ?? { records: [] };
+      $('#view-records').replaceChildren(...(views.records.length ? views.records.map(r => rowOf([cell(time(r.at)), cell(r.who)]))
+        : [rowOf([cell('기록 없음')])]));
+      const src = data.sources;
+      $('#sources').textContent = `출처 — 제공 엔진: ${src.engine.name}(${src.engine.provider}: ${src.engine.role}, 이 저장소에 없음) · 학생 작업: ${src.student.map(x => `${x.part}(${x.files})`).join(', ')}`;
+      $('#audit-records').replaceChildren(...(data.audit.records.length ? data.audit.records.map(r => rowOf([cell(time(r.at)), cell(r.action), cell(r.resource)]))
+        : [rowOf([cell('기록 없음')])]));
+      // 화면 수치 = 가린 서버 기록 대조
+      const checks = [
+        ['기기 수 = 기기 기록 줄 수', rev.count === rev.records.length],
+        ['기기 상태별 합 = 기기 수', sum(rev.byStatus) === rev.count],
+        ['감사 행동별 합 = 감사 기록 줄 수', sum(data.audit.byAction) === data.audit.records.length],
+        ['복원 실행 수 = 감사 기록의 restore_note 줄 수', rec.restores === data.audit.records.filter(r => r.action === 'restore_note').length],
+        ['거부 수 = 거부 기록 줄 수', den.count === den.records.length],
+        ['거부 코드별 합 = 거부 기록 줄 수', sum(den.byCode) === den.records.length],
+        ['점검 요청 수 = attackId가 있는 거부 줄 수', sum(den.byAttack) === den.records.filter(r => r.attackId).length],
+      ];
+      $('#consistency').textContent = `수치와 가린 기록 대조: ${checks.map(([name, ok]) => `${ok ? '✔' : '✘'} ${name}`).join(' · ')}`;
+    }
+
+    async function runMatrix() {
+      $('#run').disabled = true;
+      $('#matrix-meta').textContent = '실측 중…';
+      const rows = await runChecks({ base: '', session: true });
+      lastMatrix = { schema: 'aleph.ops.matrix.v1', source: 'ops.html', checkedAt: new Date().toISOString(), summary: summarize(rows), rows };
+      $('#matrix').replaceChildren(...rows.map(r => rowOf([cell(`${r.step}`), cell(r.kind), cell(r.name), cell(r.expected), cell(r.actual),
+        cell(r.result, r.result === '일치' ? 'ok' : r.result === '불일치' ? 'bad' : 'skip'), cell(r.requestId), cell(time(r.checkedAt)), cell(r.note)])));
+      const s = lastMatrix.summary;
+      $('#matrix-meta').textContent = `일치 ${s.matched} · 불일치 ${s.mismatched} · 미실행 ${s.notRun} / ${s.total}줄`;
+      $('#final-41').textContent = s.finalAssault41;
+      $('#copy').disabled = false;
+      $('#run').disabled = false;
+    }
+
+    $('#reload').addEventListener('click', loadSummary);
+    $('#run').addEventListener('click', runMatrix);
+    $('#copy').addEventListener('click', async () => {
+      try { await navigator.clipboard.writeText(JSON.stringify(lastMatrix, null, 2)); $('#matrix-meta').textContent += ' · 복사함'; } catch { /* 무시 */ }
+    });
+
+    // 처음에는 모든 줄을 미실행으로 보여 줍니다(아직 보내지 않았으므로).
+    $('#matrix').replaceChildren(...CHECKS.map(c => rowOf([cell(`${c.step}`), cell(c.kind), cell(c.name), cell(c.expected), cell('-'), cell('미실행', 'skip'), cell('-'), cell('-'), cell(c.note ?? '')])));
+
+    const { data } = await getJson('/api/auth/session');
+    const approved = data?.loggedIn && ['approved', 'engine_verified'].includes(data?.device?.status);
+    if (!approved) {
+      $('#gate').textContent = data?.loggedIn
+        ? '이 기기는 아직 서버에서 승인되지 않아 작전실을 열지 않습니다. 자료실에서 기기 승인을 먼저 받아 주세요.'
+        : '로그인하지 않아 작전실을 열지 않습니다. 자료실에서 로그인하고 승인된 기기로 다시 와 주세요.';
+    } else {
+      $('#gate').hidden = true;
+      $('#ops').hidden = false;
+      await loadSummary();
+    }
+  </script>
+</body>
+</html>

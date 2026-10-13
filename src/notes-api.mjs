@@ -71,6 +71,7 @@ export async function requireLogin(request, response) {
   const authorization = typeof header === 'string' ? header : viaCookie ? `Bearer ${cookieToken}` : undefined;
   const login = await verify(authorization).catch(() => null);
   if (!login?.userId) {
+    await logDenial('login_required', routeShapeOf(request), null, request);
     response.setHeader('WWW-Authenticate', 'Bearer');
     send(response, 401, { error: 'LOGIN_REQUIRED', message: '로그인이 필요합니다. 토큰이 없거나 확인되지 않았습니다.' });
     return null;
@@ -83,7 +84,7 @@ export async function requireLogin(request, response) {
 }
 
 // 자료 API용: 로그인 확인 + (학생 로그인이면) 이 기기가 서버에 승인된 등록 기기인지 확인.
-// 심판 토큰의 기기는 반 엔진과 판정기(deviceRegistered)가 확인하므로 여기서는 브라우저 기기 쿠키를 요구하지 않습니다.
+// 심판 토큰의 기기는 ALEPH SDP 엔진과 판정기(deviceRegistered)가 확인하므로 여기서는 브라우저 기기 쿠키를 요구하지 않습니다.
 // 반환: 확인된 사용자(주인) 키 또는 null(이미 응답함).
 export async function requireUser(request, response, { device = true } = {}) {
   const session = await requireLogin(request, response);
@@ -97,7 +98,7 @@ export async function requireUser(request, response, { device = true } = {}) {
     return null;
   }
   if (state.status !== 'approved') {
-    logDenial('device_not_approved', `device:${state.code ?? '?'}`, session.owner);
+    await logDenial('device_not_approved', `device:${state.code ?? '?'}`, session.owner, request);
     send(response, 403, { error: 'DEVICE_NOT_APPROVED', status: state.status, code: state.code ?? null,
       message: '이 기기는 아직 서버에서 승인되지 않았습니다. 승인 전에는 자료를 보여 주지 않습니다.' });
     return null;
@@ -244,8 +245,45 @@ export const ZONES = Object.freeze({
 export const resourceId = (kind, id) => `${kind}:${String(id).toLowerCase()}`;
 
 // 거부 사유를 짧게 남깁니다. 토큰·본문·이메일은 남기지 않고, 사용자 ID는 앞 8자리만.
-export function logDenial(code, resource, userId) {
-  console.warn(`deny ${code} resource=${resource} user=${String(userId ?? '-').slice(0, 8)}`);
+// 거부 기록(12단계): 콘솔 로그와 함께 감사 테이블에 action 'deny'로 한 줄 덧붙입니다.
+// actor는 사용자 키 앞 8자리(로그인 없으면 'anon'), detail에는 거부 코드만 둡니다(토큰·본문 없음).
+// 작전실은 이 줄들을 가려서 그대로 보여 주고, 화면 수치는 그 줄 수로만 셉니다.
+// 요청에 X-Request-Id(점검이 만든 UUID)·X-Aleph-Attack-Id(점검 이름)가 있으면 형식을 확인한 뒤 함께 남깁니다.
+const REQUEST_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu;
+const ATTACK_ID = /^[a-z0-9][a-z0-9_.-]{0,79}$/iu;
+export async function logDenial(code, resource, userId, request = null) {
+  const requestId = String(request?.headers?.['x-request-id'] ?? request?.query?.requestId ?? '');
+  const attackId = String(request?.headers?.['x-aleph-attack-id'] ?? request?.query?.attackId ?? '');
+  const detail = { code: String(code).slice(0, 40) };
+  if (REQUEST_ID.test(requestId)) detail.requestId = requestId.toLowerCase();
+  if (ATTACK_ID.test(attackId)) detail.attackId = attackId;
+  const client = String(request?.query?.client ?? '');
+  if (/^[a-z0-9._-]{1,60}$/iu.test(client)) detail.client = client;   // 제출 묶음 진단(응답 모양), 비밀값 없음
+  // 진단(12단계): 요청에 어떤 표시가 붙어 왔는지 남깁니다. 로그인 토큰·쿠키·IP·주소 관련 값은 남기지 않고,
+  // 헤더 이름 목록과 x- 헤더 값·User-Agent·쿼리 문자열만 짧게 남깁니다.
+  const SKIP = /^(authorization|cookie|x-forwarded-|x-real-ip|x-vercel-(ip|forwarded|proxied|sc-)|forwarded|x-vercel-oidc|x-vercel-proxy-signature)/iu;
+  const headers = request?.headers && typeof request.headers === 'object' ? request.headers : {};
+  const names = Object.keys(headers).filter(name => !/^(authorization|cookie)$/iu.test(name)).sort();
+  const marks = Object.entries(headers)
+    .filter(([name]) => (/^x-/iu.test(name) || /^user-agent$/iu.test(name)) && !SKIP.test(name) && !/^x-vercel-/iu.test(name))
+    .map(([name, value]) => `${name}=${String(value).slice(0, 80)}`);
+  const query = String(request?.url ?? '').split('?')[1] ?? '';
+  detail.seen = [...marks, query ? `q:${query.slice(0, 200)}` : '', `h:${names.filter(name => !/^x-vercel-|^x-forwarded-|^x-real-ip$|^forwarded$/iu.test(name)).join(',')}`]
+    .filter(Boolean).join(' | ').slice(0, 600);
+  console.warn(`deny ${code} resource=${resource} user=${String(userId ?? '-').slice(0, 8)} request=${detail.requestId ?? '-'} attack=${detail.attackId ?? '-'}`);
+  await audit('deny', String(resource ?? '?').slice(0, 120), userId ?? 'anon', detail);
+}
+
+// 거부가 아닌 무시(요청은 계속 처리): 콘솔에만 남깁니다.
+export function logIgnored(code, resource, userId) {
+  console.warn(`ignored ${code} resource=${resource} user=${String(userId ?? '-').slice(0, 8)}`);
+}
+
+// 요청 경로를 자료 ID 없는 모양으로: GET /api/notes/1234… → GET /api/notes/:id
+export function routeShapeOf(request) {
+  const path = String(request?.url ?? '').split('?')[0];
+  if (!path.startsWith('/api/')) return 'route:?';
+  return `route:${request.method ?? 'GET'} ${path.split('/').map((part, index) => (index > 2 && part && !/^[a-z]{1,20}$/u.test(part) ? ':id' : part)).join('/')}`;
 }
 
 // 본문에 role·isInstructor 같은 값이 와도 권한 판단에 쓰지 않습니다(기록만).
@@ -370,6 +408,54 @@ export async function approveDevice(owner, code, approverCode) {
     body: { status: 'approved', approved_at: new Date().toISOString(), approved_via: `device:${approverCode}` } });
   if (rows.length) await audit('device_approve', `device:${code}`, owner, { via: `device:${approverCode}` });
   return rows.length > 0;
+}
+
+// ── 12단계: 탈환 작전실 요약 ─────────────────────────────────
+// 요청한 사용자 자신의 서버 기록만 읽고, 수치와 가린 기록을 "같은 조회 결과"에서 만듭니다(그래서 항상 서로 맞음).
+// 메모 본문·제목, 토큰, 기기 비밀값, 이메일은 넣지 않습니다. ID는 앞 4자리만 남기고 가립니다.
+const maskId = value => {
+  const text = String(value ?? '');
+  if (text.startsWith('route:')) return text;   // 경로 모양(:id)에는 자료 ID가 없음
+  const [kind, id] = text.includes(':') ? [text.slice(0, text.indexOf(':') + 1), text.slice(text.indexOf(':') + 1)] : ['', text];
+  return id ? `${kind}${id.slice(0, 4)}…` : text;
+};
+const countBy = (rows, key) => rows.reduce((acc, row) => ({ ...acc, [row[key]]: (acc[row[key]] ?? 0) + 1 }), {});
+
+export async function opsSummary(owner) {
+  const RECORD_LIMIT = 50;
+  const me = String(owner).slice(0, 8);
+  const [notesRows, backupRows, deviceRows, auditRows, denyRows, viewRows] = await Promise.all([
+    db(`?select=note_id&owner_id=eq.${owner}&limit=500`),
+    db(`?select=note_id,source,created_at&owner_id=eq.${owner}&order=id.asc&limit=500`, { table: 'vault_notes_backup' }),
+    db(`?select=device_code,status,approved_via,created_at,approved_at&owner_id=eq.${owner}&limit=100`, { table: 'vault_devices' }),
+    db(`?select=at,action,resource&actor=eq.${me}&action=not.in.(deny,ops_view)&order=id.desc&limit=${RECORD_LIMIT}`, { table: 'vault_audit' }),
+    // 거부 기록: 모든 요청의 거부(로그인 없음·나·다른 사용자). 사용자 키는 앞 4자리, 자원 ID는 앞 4자리만 보여 줍니다.
+    db(`?select=at,resource,actor,detail&action=eq.deny&order=id.desc&limit=${RECORD_LIMIT}`, { table: 'vault_audit' }),
+    // 작전실 조회 기록: 모든 사용자, 사용자 키는 앞 4자리만.
+    db('?select=at,actor&action=eq.ops_view&order=id.desc&limit=20', { table: 'vault_audit' }),
+  ]);
+  const views = viewRows.map(row => ({ at: row.at, who: row.actor === me ? '나' : `${String(row.actor).slice(0, 4)}…` }));
+  const denials = denyRows.map(row => ({ at: row.at,
+    who: row.actor === 'anon' ? '로그인 없음' : row.actor === me ? '나' : `다른 사용자 ${String(row.actor).slice(0, 4)}…`,
+    code: String(row.detail?.code ?? '?'), resource: maskId(row.resource),
+    requestId: typeof row.detail?.requestId === 'string' ? row.detail.requestId : null,
+    seen: typeof row.detail?.seen === 'string' ? row.detail.seen : null,
+    attackId: typeof row.detail?.attackId === 'string'
+      ? `${row.detail.attackId}${typeof row.detail?.client === 'string' ? ` (${row.detail.client})` : ''}` : null }));
+  return {
+    notes: { count: notesRows.length },
+    backups: { count: backupRows.length, notesCovered: new Set(backupRows.map(row => row.note_id)).size,
+      bySource: countBy(backupRows, 'source') },
+    devices: { count: deviceRows.length, byStatus: countBy(deviceRows, 'status'),
+      records: deviceRows.map(row => ({ device: `device:${String(row.device_code).slice(0, 4)}…`, status: row.status,
+        approvedVia: row.approved_via ? String(row.approved_via).replace(/:(.{4}).*$/u, ':$1…') : null,
+        createdAt: row.created_at, approvedAt: row.approved_at })) },
+    audit: { count: auditRows.length, limited: auditRows.length >= RECORD_LIMIT, byAction: countBy(auditRows, 'action'),
+      records: auditRows.map(row => ({ at: row.at, action: row.action, resource: maskId(row.resource) })) },
+    views: { count: views.length, byWho: countBy(views, 'who'), records: views },
+    denials: { count: denials.length, limited: denials.length >= RECORD_LIMIT, byCode: countBy(denials, 'code'),
+      byWho: countBy(denials, 'who'), byAttack: countBy(denials.filter(row => row.attackId), 'attackId'), records: denials },
+  };
 }
 
 export function dbFailure(response, error) {

@@ -1,7 +1,7 @@
 // GET /api/notices/:id → {id,title,body} (로그인한 사용자 누구나)
 // PUT /api/notices/:id {title,body} → DB(vault_staff)에 강사로 저장된 사용자만. 그 밖에는 403.
 // 화면 메뉴·요청 본문의 role은 믿지 않습니다. 거부 사유는 서버 기록에 짧게 남깁니다.
-import { UUID, claimedRole, cleanNote, dbFailure, isInstructor, logDenial, notices, readBody, requireUser,
+import { UUID, claimedRole, cleanNote, dbFailure, isInstructor, logDenial, logIgnored, notices, readBody, requireUser,
   resourceId, send } from '../../src/notes-api.mjs';
 
 const notFound = response => send(response, 404, { error: 'NOT_FOUND', message: '공지가 없습니다.' });
@@ -22,7 +22,7 @@ export default async function handler(request, response) {
   if (method === 'PUT') {
     try {
       if (!(await isInstructor(userId))) {
-        logDenial('instructor_only', id ? resourceId('notice', id) : 'notice:?', userId);
+        await logDenial('instructor_only', id ? resourceId('notice', id) : 'notice:?', userId, request);
         return send(response, 403, { error: 'INSTRUCTOR_ONLY', message: '강사만 공지를 고칠 수 있습니다.' });
       }
     } catch (error) {
@@ -31,7 +31,7 @@ export default async function handler(request, response) {
   }
 
   if (!id) {
-    logDenial('invalid_resource_id', 'notice:?', userId);
+    await logDenial('invalid_resource_id', 'notice:?', userId, request);
     return notFound(response);
   }
   const resource = resourceId('notice', id);
@@ -43,7 +43,7 @@ export default async function handler(request, response) {
     }
     const input = readBody(request);
     if (!input) return send(response, 400, { error: 'INVALID_JSON', message: 'JSON 객체를 보내 주세요.' });
-    if (claimedRole(input)) logDenial('body_role_ignored', resource, userId);
+    if (claimedRole(input)) logIgnored('body_role_ignored', resource, userId);
     const notice = cleanNote(input, { partial: true });
     if (notice.error) return send(response, 400, { error: 'INVALID_NOTICE', message: notice.error });
     const updated = await notices.update(id, userId, notice.value);

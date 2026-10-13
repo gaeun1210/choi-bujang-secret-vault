@@ -1,6 +1,13 @@
-# BYTE BACK 방어전 시작 틀 R5
+# 최 부장 비밀 자료실 — BYTE BACK 방어전 학생 저장소
 
-이 저장소는 1단계에서 학생 본인이 GitHub 저장소와 Vercel 배포를 만드는 출발점입니다. 자료실의 메모는 모두 가상 자료입니다. 실제 학생 자료, 토큰, 비밀키를 넣지 마세요.
+이 저장소는 운영 측 시작 틀(ChoiTimo/aleph-defense-starter R5)에서 출발해 학생이 1~12단계에 걸쳐 만든 자료실입니다. 자료실의 메모는 모두 가상 자료이며, 실제 학생 자료·토큰·비밀키는 넣지 않습니다.
+
+## 출처 (제공 엔진과 학생 작업)
+
+- **제공 엔진: ALEPH SDP 엔진** — 운영 측이 제공합니다. 신원·기기·경로 확인, 판정기에 판정 요청 보내기, 탐지 사건 전달, 접속 회수 실행, 심판 판정을 맡습니다. 이 저장소에는 엔진 코드가 없습니다.
+- **학생 작업** — 판정기(`src/decider.mjs`), 탐지 규칙(`src/detect.mjs`), 접속 앱(`public/`), 자료실(`api/`, `src/notes-api.mjs`, `src/ops-summary.mjs`, `supabase/`).
+- **제공 시작 틀** — `src/verify-login.mjs`, `scripts/bundle.mjs` 등 첫 커밋 `0ff36ed`의 파일(자세한 표는 아래 「탈환 작전실과 재현 안내」).
+- 비밀번호·토큰·서버 전용 키·기기 비밀값은 저장소와 제출 묶음에 넣지 않습니다.
 
 ## 단계 기록
 
@@ -18,11 +25,12 @@
 | 8단계 | `885f310` 「8단계 저장점」 | 자원 구역 나누기: 메모(`note:`)·강사 공지(`notice:`) 자원 ID, 판정기 구역 규칙(정확한 메서드·경로 허용 목록), 자료 API의 소유자·DB 강사 권한 재확인, 공지 테이블 SQL |
 | 9단계 | `df9422b` 「9단계 저장점」 | 탐지 함수 `src/detect.mjs`: 가상 사건 입력 정리, 평소와 다른 네트워크 + 다량 조회 탐지, 별도 결과로 `propose_revocation` 제안 |
 | 10단계 | `f149579` 「10단계 저장점」 | 백업에서 되살리기: 검증한 안전 정책 사본과 차이 보기·확인 후 되돌리기(감사 기록 덧붙이기), 비공개 메모 사본과 본인 메모 한 건 복원 `POST /api/restore/:id` |
-| 11단계 | 「11단계 저장점」 | 나만의 접속 앱: 설치형 웹앱(manifest·아이콘·오프라인 안내), 기기 승인 요청·상태 화면, 서버가 승인한 기기에서만 자료 열기, 토큰·기기 비밀값은 HttpOnly 쿠키로만 |
+| 11단계 | `abb36f0` 「11단계 저장점」 | 나만의 접속 앱: 설치형 웹앱(manifest·아이콘·오프라인 안내), 기기 승인 요청·상태 화면, 서버가 승인한 기기에서만 자료 열기, 토큰·기기 비밀값은 HttpOnly 쿠키로만 |
+| 12단계 | 「12단계 저장점」 | 탈환 작전실 `/ops.html`·`GET /api/ops/summary`(판정기 규칙·탐지 규칙·회수 상태·복구 버전·감사, 가린 서버 기록과 수치 대조), 1~11단계 정상·금지 요청 실측표(`public/ops-checks.mjs`, `npm run ops:matrix`), 설치·실행·중지·복구 안내와 출처 구분 |
 
 ## 판정기 (6~8단계)
 
-`src/decider.mjs`의 `decide(request)`는 반 엔진이 신원·기기·경로를 확인한 뒤 보낸 요청만 받습니다(계약: `docs/DECIDER_REQUEST.md`). 규칙 이름은 같은 파일의 `RULE_IDS`에 있습니다. 위에서부터 차례로 봅니다.
+`src/decider.mjs`의 `decide(request)`는 ALEPH SDP 엔진이 신원·기기·경로를 확인한 뒤 보낸 요청만 받습니다(계약: `docs/DECIDER_REQUEST.md`). 규칙 이름은 같은 파일의 `RULE_IDS`에 있습니다. 위에서부터 차례로 봅니다.
 
 | 순서 | 규칙 | 조건 | 결과 |
 | --- | --- | --- | --- |
@@ -56,8 +64,52 @@
 
 1. `npm run decider:test` → `통과 · 등록 기기의 정상 요청`, `통과 · 미등록 기기의 가상 요청`, `통과 · 복합 이상 접속`(→ `step_up`), `통과 · 다시 확인한 복합 이상 접속`(→ `allow`)
 2. `npm run fixture:7` → `정상 사건: allow`, `복합 이상 사건: step_up`
-3. 이 명령들은 가상 요청 연습이며 심판 판정이 아닙니다. 다시 로그인 전 자료 차단과 새 요청 허용의 실측은 재로그인 계약(`stepUp`)을 검증하는 반 엔진이 있는 환경에서 심판이 합니다(이 저장소의 자기 점검에는 미실행으로 기록).
+3. 이 명령들은 가상 요청 연습이며 심판 판정이 아닙니다. 다시 로그인 전 자료 차단과 새 요청 허용의 실측은 재로그인 계약(`stepUp`)을 검증하는 ALEPH SDP 엔진이 있는 환경에서 심판이 합니다(이 저장소의 자기 점검에는 미실행으로 기록).
 4. 이번 과정에는 따로 설치할 접속 프로그램이 없습니다. 인증서·CA·키는 만들지 않았고, 자료실 화면(`/`)과 `/api/notes…`는 바뀌지 않았습니다.
+
+## 탈환 작전실과 재현 안내 (12단계)
+
+이 안내는 검사한 커밋 `abb36f0`(「11단계 저장점」)에 12단계 변경을 더한 「12단계 저장점」 기준입니다. 비밀번호·토큰·서버 전용 키·기기 비밀값·실제 이메일은 이 저장소와 제출 묶음에 없습니다. 필요한 값은 각자 Vercel·Supabase 설정 화면의 비밀 입력란에만 넣습니다.
+
+### 출처 구분
+
+| 구분 | 무엇 | 위치 |
+| --- | --- | --- |
+| 제공 엔진 | **ALEPH SDP 엔진**(운영 측 제공): 신원·기기·경로 1차 확인, 판정기에 `aleph.decision.v1` 요청 보내기, 탐지 사건 전달, 접속 회수 실행, 심판 판정·총공세 41종 | 이 저장소에 없음(운영 측 제공) |
+| 제공 시작 틀 | `src/verify-login.mjs`, `scripts/bundle.mjs`·`build-public.mjs`·`deployment-identity.mjs`·`decider-test.mjs`·`detect-test.mjs`·`fixture-7.mjs`·`xdr-run.mjs`, `docs/`, `package/`, `xdr/fixtures/`, `test/r5`·`package-starter`·`xdr-run` 시험 | 첫 커밋 `0ff36ed` (시작 틀 R5) |
+| 학생 작업 | 판정기 규칙(`src/decider.mjs`), 탐지 규칙(`src/detect.mjs`), 자료실 API(`api/`, `src/notes-api.mjs`, `src/auth-api.mjs`), 접속 앱(`public/`), 정책 사본·복원(`policy/`, `scripts/policy-*.mjs`), 작전실·실측표(`public/ops.html`, `public/ops-checks.mjs`, `src/ops-summary.mjs`(경로 `/api/ops/summary`는 `vercel.json` rewrites로 `api/auth/session.js`가 처리 — Vercel 무료 요금제 서버 함수 12개 제한), `scripts/ops-matrix.mjs`), SQL 제안(`supabase/`), 보너스(`xdr/brute-force`, `xdr/web-injection`), 자기 점검(`src/attack-check.mjs`), 학생 시험(`test/policy-restore.test.mjs`, `test/decider-zones.test.mjs`) | 2단계~12단계 커밋 |
+
+`npm run decider:test`·`decider:zones`·`detect:test`·`fixture:7`·`ops:matrix`의 로컬 결과는 가상 요청 연습이며 ALEPH SDP 엔진이나 심판의 판정이 아닙니다.
+
+### 탈환 작전실 (`/ops.html`)
+
+- 승인된 기기에서 로그인한 뒤 자료실의 「탈환 작전실 열기 →」를 누릅니다. 로그인·기기 승인이 없으면 열리지 않습니다(서버 `GET /api/ops/summary`도 같은 검사, 401·403).
+- 카드 여섯 개와 출처 줄: 학생 판정기 규칙(`RULE_IDS`, 정책 버전, 정책 사본 sha256 대조), 탐지 규칙, 회수 상태(내 기기 승인·대기·취소 수), 복구 버전(정책 사본 버전·sha256, 메모 사본 수, 복원 실행 수), 거부 기록, 감사 기록. 출처 줄은 제공 엔진(ALEPH SDP 엔진)과 학생 작업(판정기·탐지 규칙·접속 앱·자료실)을 나눠 적습니다. 모두 서버가 그때 읽은 값이며 응답 시각·커밋·요청 ID(`x-vercel-id`)를 함께 보여 줍니다.
+- 판정기·탐지의 **실제 엔진 판정·사건**은 이 자료실에서 볼 수 없으므로 「미실행 — ALEPH SDP 엔진(제공)」으로 표시합니다.
+- **거부 기록:** 로그인 없는 조회(401 `login_required`), 다른 사용자 메모 조회(404 `not_owner_or_missing`), 승인 안 된 기기(403) 같은 거부는 서버가 감사 테이블(`vault_audit`, action `deny`)에 가려서 한 줄씩 남깁니다(사용자 키 앞 8자리 또는 `anon`, 거부 코드, 자원 ID 앞 4자리 또는 `route:GET /api/notes/:id` 같은 경로 모양). 작전실은 모든 요청의 거부를 가려서 보여 줍니다(사용자 키·자원 ID는 앞 4자리만).
+- **정책 사본 대조:** 배포된 `src/decider.mjs`의 SAFETY-POLICY 블록 sha256을 서버가 실제로 계산해 `policy/backup/MANIFEST.json`의 sha256과 비교합니다. 파일을 읽지 못하면 「대조 미실행」입니다(버전 이름만으로 같다고 하지 않음).
+- 아래 표는 가린 서버 기록입니다(기기 코드·자원 ID는 앞 4자리만). 화면 수치는 그 기록 줄 수로만 세고, 「기기 수 = 기록 줄 수」, 「상태별 합 = 기기 수」, 「행동별 합 = 감사 줄 수」, 「복원 수 = restore_note 줄 수」, 「거부 수 = 거부 줄 수」, 「거부 코드별 합 = 거부 줄 수」를 대조해 ✔/✘로 보여 줍니다. 가상 메모 본문·제목은 응답에 넣지 않습니다.
+- 제출 묶음(`npm run bundle`, 12단계)은 요청을 보내지 않고 점검 19개를 모두 `not_run`으로 적습니다. 실측(상태 코드·요청 ID·확인 시각)은 작전실 「실측 실행」 표와 서버의 가린 거부 기록에 남깁니다.
+- 작전실 요약을 누가 읽었는지(사용자 키 앞 4자리·시각)도 감사 기록(`ops_view`)에 남겨 작전실에 보여 줍니다.
+
+### 1~11단계 정상·금지 실측표
+
+- **화면:** 작전실의 「실측 실행」 → 단계·정상/금지·요청·기대·실제 API 결과·일치 여부·요청 ID·확인 시각 표. 「표 JSON 복사」로 보관합니다.
+- **경로 공개:** 작전실 요약 경로 `GET /api/ops/summary`를 `aleph.config.json`의 `allowedRoutes`와 `opsRoute`에 적어 `/aleph.json`에 싣습니다(읽기 전용, 로그인 필요, 메모 본문 없음).
+- **명령:** `npm run ops:matrix` → 로그인 없이 보낼 수 있는 줄만 실제 배포 주소로 보내고, 판정기(`decider:test`·`fixture:7`·`decider:zones`)·탐지·정책 복원 로컬 연습을 따로 표시해 `artifacts/ops-matrix.json`(Git 제외)에 씁니다. 네트워크가 막히면 그 줄은 미실행입니다.
+- 엔진이 필요한 줄(판정기·탐지·회수)과 내용이 바뀌는 줄(복원)은 자동으로 보내지 않고 **미실행**입니다. 응답에 `x-vercel-id`가 없으면(중간 프록시 응답) 사이트 결과로 세지 않고 미실행입니다.
+- **심판 총공세 41종은 목록이 이 저장소에 없고 실행하지 않았으므로 모두 미실행**입니다. 실측표의 일치는 41종 통과를 뜻하지 않습니다.
+
+### 설치·실행·중지·복구
+
+| 대상 | 설치 | 실행·확인 | 중지 | 복구 |
+| --- | --- | --- | --- | --- |
+| 학생 판정기 `src/decider.mjs` | Node 22, `npm install` | `npm run decider:test`, `npm run fixture:7`, `npm run decider:zones`(8단계 구역 규칙, 학생 작성) (모두 로컬 연습) | 엔진 설정에서 판정기 연결 해제(운영 측). 코드의 `starter.deny`가 깨진 요청을 막음 | `npm run policy:diff` → 차이 확인 → `npm run policy:restore -- --confirm=safe-v9` (검증한 사본 `policy/backup/`으로 SAFETY-POLICY 블록만 되돌리고 `policy/audit.log`에 한 줄 덧붙임) |
+| 탐지 규칙 `src/detect.mjs` | 위와 같음 | `npm run detect:test` (가상 사건 연습, 엔진 사건 전달 아님) | 회수는 제안(`propose_revocation`)만 하므로 엔진이 실행하지 않으면 영향 없음 | `git log -- src/detect.mjs`로 저장점 확인 후 `git revert <커밋>` |
+| 접속 앱 `public/` | 배포 주소를 열고 브라우저의 「앱 설치」 | 로그인 → 「이 기기 승인 요청」 → 첫 기기는 `supabase/step11-devices.sql` [다]의 코드 자리를 바꿔 SQL Editor에서 승인, 다음 기기는 승인된 기기 화면에서 승인 | 로그아웃(세션 쿠키 삭제). 기기 회수: SQL Editor에서 `update public.vault_devices set status = 'revoked' where device_code = 'XXXX-XXXX';` | 회수한 기기 기록은 다시 요청해도 `revoked`로 남습니다. 같은 기기를 되살리려면 SQL Editor에서 `update public.vault_devices set status = 'approved', approved_at = now(), approved_via = 'sql_editor' where device_code = 'XXXX-XXXX' and status = 'revoked';`, 새 기기로 받으려면 브라우저에서 이 사이트 쿠키를 지운 뒤 새 승인 요청 → 승인. 화면 코드는 `git revert`로 저장점에 맞춤 |
+| 자료실 (Vercel + Supabase) | GitHub 저장소를 Vercel에 연결, 환경변수 `SUPABASE_URL`·`SUPABASE_SECRET_KEY`를 Vercel 설정 화면에만 입력. SQL은 아래 「다시 실행하는 방법」 1~6 뒤 `step8-zones.sql` → `step10-backup.sql` → `step11-devices.sql` 순서 | `npm run build -- --local`, 배포 뒤 `/aleph.json`의 step·커밋 확인, `/ops.html` | 자료 API 중지: Vercel 환경변수 `SUPABASE_SECRET_KEY`를 지우고 Redeploy → 메모·공지·복원·기기·작전실 API가 `500 SERVER_NOT_CONFIGURED`로 멈춤(정적 화면만 남음). 문제 배포만 내리기: Vercel Deployments에서 이전 배포로 Rollback. 키가 샜다고 의심되면 Supabase에서 서버 키 교체 후 Vercel 값 갱신 | 메모 한 건: 자료실의 되살리기(`POST /api/restore/:id`, 본인 메모·비공개 사본 해시 확인). 배포: Vercel Rollback 또는 저장점 커밋 `git revert` 뒤 다시 배포 |
+
+**재현 순서:** ① 저장소 복제·`npm install` → ② Supabase SQL(2→3→4→5→8→10→11단계 순) → ③ Vercel 연결·환경변수 → ④ 배포 후 `/aleph.json` 확인 → ⑤ A 계정 로그인·첫 기기 승인 → ⑥ `/ops.html`에서 수치 대조·「실측 실행」 → ⑦ `npm run decider:test`·`decider:zones`·`detect:test`·`ops:matrix` 로컬 연습 → ⑧ `npm run bundle`.
 
 ## 나만의 접속 앱과 기기 승인 (11단계)
 
@@ -67,7 +119,7 @@
 - **토큰·기기 비밀값 위치:** 로그인 토큰은 `__Host-vault_session`, 기기 비밀값은 `__Host-vault_device` **HttpOnly·Secure·SameSite=Strict 쿠키**로만 오갑니다. 화면 코드는 두 값을 읽을 수 없고, 브라우저의 어떤 저장 공간에도 쓰지 않습니다(5단계에서 쓰던 세션 저장 방식은 없앰). 로그인 응답 본문에도 토큰이 없습니다. 쿠키로 들어온 쓰기 요청은 화면이 붙이는 `X-Vault-Request: 1` 헤더가 있어야 합니다(교차 사이트 요청 위조 방지).
 - **기기 승인 흐름:** 로그인 → 「승인 요청」(`POST /api/device/request`) → 서버가 기기 비밀값의 sha256만 `vault_devices`에 **대기(pending)**로 저장하고 기기 코드(`XXXX-XXXX`)를 보여 줌 → **첫 기기는 관리자가 Supabase SQL Editor에서**(`supabase/step11-devices.sql` [다]), 두 번째 기기부터는 **이미 승인된 내 기기**의 화면에서 코드로 승인(`POST /api/device/approve`) → 「승인 상태 다시 확인」(`GET /api/auth/session`). 승인되지 않은 기기는 승인 요청을 보낼 수 없어 스스로를 승인할 수 없습니다. 승인 기록은 `vault_audit`에 덧붙입니다.
 - **승인 전에는 자료 없음:** 학생 로그인으로 들어온 자료 API(`/api/notes…`, `/api/notices…`, `/api/restore/:id`)는 서버가 이 기기를 승인된 등록 기기로 확인한 뒤에만 자료를 돌려주고, 아니면 `403 DEVICE_NOT_APPROVED`입니다. 화면도 승인 전에는 자료 영역을 숨기고 비웁니다.
-- **심판·도구 요청:** `Authorization` 헤더로 오는 심판 토큰의 기기는 반 엔진과 판정기(`deviceRegistered`, 6단계 `device_registered`)가 확인하므로, 브라우저 기기 쿠키를 요구하지 않습니다. 1~10단계의 정상·거부 결과(무로그인 401, 남의 메모 404, 공지 수정 403, 복원 등)는 그대로입니다.
+- **심판·도구 요청:** `Authorization` 헤더로 오는 심판 토큰의 기기는 ALEPH SDP 엔진과 판정기(`deviceRegistered`, 6단계 `device_registered`)가 확인하므로, 브라우저 기기 쿠키를 요구하지 않습니다. 1~10단계의 정상·거부 결과(무로그인 401, 남의 메모 404, 공지 수정 403, 복원 등)는 그대로입니다.
 - **DB 준비 (검토 후 한 번):** `supabase/step11-devices.sql` [가] → [나](anon·authenticated 권한 false, RLS true). 첫 기기 승인은 화면에 나온 코드로 [다]를 실행합니다.
 
 ## 백업에서 되살리기 (10단계)
@@ -77,7 +129,7 @@
 - **시험 정책**은 판정기 `src/decider.mjs` 안의 `SAFETY-POLICY` 블록 하나입니다(구역 표, 기능 이름, 주인 검사, 다시 로그인 기준, 거부 이유 코드). 판정기는 계속 파일 하나로 혼자 동작합니다.
 - **침해 전에 검증한 사본**은 `policy/backup/safety-policy.safe-v9.json`이고, `policy/backup/MANIFEST.json`에 버전(`safe-v9`)과 sha256이 적혀 있습니다. 8단계 심판 100점 커밋(`885f310`)의 구역 규칙과 `decider:test` 4항목·`fixture:7` 통과 상태에서 만들었습니다.
 - `npm run policy:diff` — 사본을 다시 읽어 해시를 대조한 뒤(없거나 다르면 **중단**), 복원할 버전과 현재 시험 정책의 **차이 항목만** 보여 줍니다. 아무 파일도 바꾸지 않습니다.
-- `npm run policy:restore` — 같은 검증과 바뀔 항목을 보여 주고 **멈춥니다**. 확인한 뒤 `npm run policy:restore -- --confirm=safe-v9`로 실행하면 `SAFETY-POLICY` 블록만 사본으로 되돌리고, 다시 읽어 해시를 대조하고, `policy/audit.log`에 한 줄을 **덧붙이고**(기존 줄은 지우거나 고치지 않음), `decider:test`를 다시 실행합니다. 블록 밖의 판정기 코드, 자료 API, 다른 서비스 규칙, 실제 운영 정책(반 엔진·심판)은 건드리지 않습니다.
+- `npm run policy:restore` — 같은 검증과 바뀔 항목을 보여 주고 **멈춥니다**. 확인한 뒤 `npm run policy:restore -- --confirm=safe-v9`로 실행하면 `SAFETY-POLICY` 블록만 사본으로 되돌리고, 다시 읽어 해시를 대조하고, `policy/audit.log`에 한 줄을 **덧붙이고**(기존 줄은 지우거나 고치지 않음), `decider:test`를 다시 실행합니다. 블록 밖의 판정기 코드, 자료 API, 다른 서비스 규칙, 실제 운영 정책(ALEPH SDP 엔진·심판)은 건드리지 않습니다.
 - 시험: `node --test test/policy-restore.test.mjs` — 임시 폴더에서 정책을 침해 상태(목록 경로 열기, 다른 사용자 ID 검사·주인 기억 끄기, 공지 수정 제한 풀기)로 바꾸면 B의 A 자료 요청이 허용되는 것을 확인한 뒤, 확인 없이는 바뀌지 않고, `--confirm=safe-v9`로 되돌리면 **B의 A 자료 요청은 다시 거부, A 정상 요청은 허용**, 기존 감사 줄 보존을 확인합니다. 사본 변조·누락이면 중단하는 것도 확인합니다.
 
 ### 2. 비공개 메모 사본에서 한 건 복원
@@ -107,13 +159,13 @@
 
 ## 도플갱어 탐지와 회수 제안 (9단계)
 
-`src/detect.mjs`의 `detect(events)`는 반 엔진이 검증해 넘긴 가상 사건을 읽어 **별도 탐지 결과**를 돌려줍니다(계약: `docs/DETECT_EVENTS.md`). 판정기의 허용/거부 응답 형식은 그대로이고, 회수 API를 만들거나 기기 권한을 직접 바꾸지 않습니다.
+`src/detect.mjs`의 `detect(events)`는 ALEPH SDP 엔진이 검증해 넘긴 가상 사건을 읽어 **별도 탐지 결과**를 돌려줍니다(계약: `docs/DETECT_EVENTS.md`). 판정기의 허용/거부 응답 형식은 그대로이고, 회수 API를 만들거나 기기 권한을 직접 바꾸지 않습니다.
 
 1. **입력 정리 (`readEvent`)**: 사건마다 시각·요청 종류(`method`)·가명 사용자(`identity.sub`)와, 있으면 확인된 기기 ID(16자리 16진수)·네트워크 표시·판정(`allow`·`deny`·`step_up`)만 꺼냅니다. 메모 내용·토큰·실명 같은 다른 칸은 읽거나 저장하거나 출력하지 않고, 모양이 틀린 값은 버리며 정상값으로 채우지 않습니다.
 2. **탐지 규칙 `burst_read_unusual_network`**: 같은 사용자의 `GET`이 어느 10분 구간에서든 120건을 넘고(121건부터, 다른 사용자와 합산하지 않음), 그 구간에 **평소와 다른 네트워크**(`unusual`·`new`·`first_seen`) 사건이 있을 때만 의심. 구간이 모두 평소 네트워크면 정상으로 둡니다. 지역은 쓰지 않습니다. 계약의 연습 사건처럼 네트워크 표시가 아예 없으면 계약 기준(10분 120건 초과)만으로 판단합니다.
 3. **회수 제안**: 의심이면 `{ action: 'propose_revocation', reasonCode: 'burst_read', subject, device }`, 아니면 `{ action: 'observe' }`. `device`는 평소와 다른 네트워크에서 가장 많이 조회한 **확인된 가상 기기 한 개**이며, 사건에 확인된 기기 ID가 없으면 지어내지 않고 뺍니다. 정상 기기는 대상이 되지 않습니다.
 
-**확인 순서 (로컬 연습)**: `npm run detect:test` → 6항목 통과(정상 30건·10분 120건·각 100건·흩어진 200건은 `observe`, 121건·200건 폭주는 `propose_revocation`). 이 연습은 실제 접속 회수나 심판 판정이 아니며, 반 엔진의 사건 전달·회수 집행·경과 시간은 심판이 가상 사건으로 확인합니다.
+**확인 순서 (로컬 연습)**: `npm run detect:test` → 6항목 통과(정상 30건·10분 120건·각 100건·흩어진 200건은 `observe`, 121건·200건 폭주는 `propose_revocation`). 이 연습은 실제 접속 회수나 심판 판정이 아니며, ALEPH SDP 엔진의 사건 전달·회수 집행·경과 시간은 심판이 가상 사건으로 확인합니다.
 
 ## 자원 구역과 자료 API 재확인 (8단계)
 
@@ -249,4 +301,4 @@ APP=https://choi-bujang-secret-vault-nine.vercel.app
 
 [AGENTS.md](AGENTS.md)를 먼저 읽히고 한 번에 한 제작 단위만 요청하세요. 5단계의 원본 API 주소, 6단계 이후 정책 규칙은 해당 단계 원고와 계약에 맞춰 추가합니다. 비밀번호·토큰·서버 전용 키·실제 학생 기록을 코드, Git, 제출 묶음에 넣지 않습니다.
 
-`src/decider.mjs`와 `src/detect.mjs`의 로컬 시험은 반 엔진이나 운영 심판의 결과가 아닙니다. 제출 묶음 계약 `aleph.defense.submission.v2`는 `scripts/bundle.mjs`에 있습니다.
+`src/decider.mjs`와 `src/detect.mjs`의 로컬 시험은 ALEPH SDP 엔진이나 운영 심판의 결과가 아닙니다. 제출 묶음 계약 `aleph.defense.submission.v2`는 `scripts/bundle.mjs`에 있습니다.

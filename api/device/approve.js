@@ -17,13 +17,13 @@ export default async function handler(request, response) {
     const me = await deviceState(request, owner);
     if (me.status !== 'approved') {
       // 심판 토큰 등 브라우저 기기 쿠키가 없는 요청은 다른 기기를 승인할 수 없습니다.
-      logDenial('approver_not_device', `device:${code}`, owner);
+      await logDenial('approver_not_device', `device:${code}`, owner, request);
       return send(response, 403, { error: 'APPROVER_DEVICE_REQUIRED', message: '승인된 기기의 자료실 화면에서만 승인할 수 있습니다.' });
     }
     if (code === me.code) return send(response, 400, { error: 'ALREADY_THIS_DEVICE', message: '이 기기는 이미 승인되어 있습니다.' });
     const approved = await approveDevice(owner, code, me.code);
     if (!approved) {
-      logDenial('device_code_not_pending', `device:${code}`, owner);
+      await logDenial('device_code_not_pending', `device:${code}`, owner, request);
       return send(response, 404, { error: 'DEVICE_NOT_FOUND', message: '대기 중인 내 기기 코드가 아닙니다.' });
     }
     return send(response, 200, { approved: true, code });

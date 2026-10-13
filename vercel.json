@@ -3,6 +3,9 @@
   "framework": null,
   "buildCommand": "npm run build",
   "outputDirectory": "public",
+  "rewrites": [
+    { "source": "/api/ops/summary", "destination": "/api/auth/session?view=ops" }
+  ],
   "functions": {
     "api/**/*.js": {
       "includeFiles": "aleph.config.json"
@@ -23,6 +26,15 @@
         {
           "key": "Referrer-Policy",
           "value": "no-referrer"
+        }
+      ]
+    },
+    {
+      "source": "/(ops.html|ops-checks.mjs)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-cache"
         }
       ]
     },

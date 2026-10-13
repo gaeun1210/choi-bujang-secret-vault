@@ -18,7 +18,7 @@ export default async function handler(request, response) {
   const raw = request.query?.id;
   const id = typeof raw === 'string' && UUID.test(raw) ? raw.toLowerCase() : null;
   if (!id) {
-    logDenial('invalid_resource_id', 'note:?', userId);
+    await logDenial('invalid_resource_id', 'note:?', userId, request);
     return notFound(response);
   }
   const resource = resourceId('note', id);
@@ -26,7 +26,7 @@ export default async function handler(request, response) {
   try {
     const snapshot = await backups.earliest(id);
     if (!snapshot) {
-      logDenial('backup_missing', resource, userId);
+      await logDenial('backup_missing', resource, userId, request);
       return notFound(response);
     }
     if (contentHash(snapshot.title, snapshot.content) !== snapshot.content_hash) {
@@ -34,13 +34,13 @@ export default async function handler(request, response) {
       return send(response, 409, { error: 'BACKUP_VERIFY_FAILED', message: '사본 검증에 실패해 복원을 중단했습니다.' });
     }
     if (snapshot.owner_id !== userId) {
-      logDenial('not_owner', resource, userId);
+      await logDenial('not_owner', resource, userId, request);
       await audit('restore_denied', resource, userId, { reason: 'not_owner' });
       return notFound(response);
     }
     const current = await currentNoteRow(id);
     if (current && current.owner_id !== userId) {
-      logDenial('owner_conflict', resource, userId);
+      await logDenial('owner_conflict', resource, userId, request);
       await audit('restore_denied', resource, userId, { reason: 'owner_conflict' });
       return notFound(response);
     }

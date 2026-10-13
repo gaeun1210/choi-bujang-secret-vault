@@ -1,5 +1,5 @@
 // 10단계 안전 정책 도구 공통 부분 — 판정기(src/decider.mjs)의 SAFETY-POLICY 블록만 읽고 씁니다.
-// 실제 운영 정책(반 엔진·심판 쪽)은 건드리지 않습니다.
+// 실제 운영 정책(ALEPH SDP 엔진·심판 쪽)은 건드리지 않습니다.
 import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 

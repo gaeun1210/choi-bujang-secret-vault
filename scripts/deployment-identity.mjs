@@ -32,6 +32,10 @@ export function deploymentIdentity(env, config) {
   if (typeof config.restoreRoute === 'string' && /^POST \/[A-Za-z0-9/_:.-]{1,200}$/u.test(config.restoreRoute)) {
     extra.restoreRoute = config.restoreRoute;
   }
+  // 12단계: 탈환 작전실 요약 경로(읽기 전용, 로그인 필요)
+  if (typeof config.opsRoute === 'string' && /^GET \/[A-Za-z0-9/_:.-]{1,200}$/u.test(config.opsRoute)) {
+    extra.opsRoute = config.opsRoute;
+  }
   return {
     schema: 'aleph.defense.deployment.v1',
     step: config.step,

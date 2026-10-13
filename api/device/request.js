@@ -10,7 +10,7 @@ export default async function handler(request, response) {
   const session = await requireLogin(request, response);
   if (!session) return undefined;
   if (session.login.kind !== 'student') {
-    return send(response, 200, { status: 'engine_verified', code: null, message: '심판 요청의 기기는 반 엔진이 확인합니다.' });
+    return send(response, 200, { status: 'engine_verified', code: null, message: '심판 요청의 기기는 ALEPH SDP 엔진이 확인합니다.' });
   }
   try {
     return send(response, 200, await requestDevice(request, response, session.owner));
