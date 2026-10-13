@@ -198,17 +198,17 @@ export async function decide(request) {
 
   // 엔진이 확인한 사용자(가명 subjectId)가 없으면 어느 구역도 열지 않습니다.
   if (typeof request.subjectId !== 'string' || !request.subjectId) {
-    return respond(request, 'deny', 'zone_not_allowed', [zone.rule]);
+    return respond(request, 'deny', 'route_not_allowed', [zone.rule]);
   }
 
   // 8단계 구역 규칙: 다른 사용자의 자원·다른 구역 자원·공지 수정은 거부.
   // 공지 수정은 강사만인데, 현재 계약에는 엔진이 확인한 강사 역할이 없으므로 브라우저 값으로 채우지 않고 모두 거부합니다
   // (최종 자료 API도 DB의 강사 권한을 다시 확인).
   const verdict = zoneVerdict(request, zone);
-  if (!verdict.allow) return respond(request, 'deny', 'zone_not_allowed', [verdict.rule]);
+  if (!verdict.allow) return respond(request, 'deny', 'route_not_allowed', [verdict.rule]);
   // 다른 사용자가 먼저 주인으로 기억된 메모면 거부
   if (verdict.rule === 'zone_own_notes' && rememberedOwnerConflict(request, zone)) {
-    return respond(request, 'deny', 'zone_not_allowed', ['zone_own_notes']);
+    return respond(request, 'deny', 'route_not_allowed', ['zone_own_notes']);
   }
 
   const rules = ['device_registered', verdict.rule];
