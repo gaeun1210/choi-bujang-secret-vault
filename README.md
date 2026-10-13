@@ -26,7 +26,8 @@
 | 9단계 | `df9422b` 「9단계 저장점」 | 탐지 함수 `src/detect.mjs`: 가상 사건 입력 정리, 평소와 다른 네트워크 + 다량 조회 탐지, 별도 결과로 `propose_revocation` 제안 |
 | 10단계 | `f149579` 「10단계 저장점」 | 백업에서 되살리기: 검증한 안전 정책 사본과 차이 보기·확인 후 되돌리기(감사 기록 덧붙이기), 비공개 메모 사본과 본인 메모 한 건 복원 `POST /api/restore/:id` |
 | 11단계 | `abb36f0` 「11단계 저장점」 | 나만의 접속 앱: 설치형 웹앱(manifest·아이콘·오프라인 안내), 기기 승인 요청·상태 화면, 서버가 승인한 기기에서만 자료 열기, 토큰·기기 비밀값은 HttpOnly 쿠키로만 |
-| 12단계 | 「12단계 저장점」 | 탈환 작전실 `/ops.html`·`GET /api/ops/summary`(판정기 규칙·탐지 규칙·회수 상태·복구 버전·감사, 가린 서버 기록과 수치 대조), 1~11단계 정상·금지 요청 실측표(`public/ops-checks.mjs`, `npm run ops:matrix`), 설치·실행·중지·복구 안내와 출처 구분 |
+| 12단계 | `0d62f84` 「12단계 저장점」 | 탈환 작전실 `/ops.html`·`GET /api/ops/summary`(판정기 규칙·탐지 규칙·회수 상태·복구 버전·감사, 가린 서버 기록과 수치 대조), 1~11단계 정상·금지 요청 실측표(`public/ops-checks.mjs`, `npm run ops:matrix`), 설치·실행·중지·복구 안내와 출처 구분 |
+| 보너스 xdr-03 | 「보너스 xdr-03 저장점」 | 알려진 취약점 악용 탐지(CVE-2021-44228·T1190): 머리글·요청 인자 안의 원격 조회 구문(jndi), 점검 도구 흔적, 조회 구문 없는 단서는 알림만, 판단·ZTNA 거부 규칙 부품·알림 로그 |
 
 ## 판정기 (6~8단계)
 
@@ -77,7 +78,7 @@
 | --- | --- | --- |
 | 제공 엔진 | **ALEPH SDP 엔진**(운영 측 제공): 신원·기기·경로 1차 확인, 판정기에 `aleph.decision.v1` 요청 보내기, 탐지 사건 전달, 접속 회수 실행, 심판 판정·총공세 41종 | 이 저장소에 없음(운영 측 제공) |
 | 제공 시작 틀 | `src/verify-login.mjs`, `scripts/bundle.mjs`·`build-public.mjs`·`deployment-identity.mjs`·`decider-test.mjs`·`detect-test.mjs`·`fixture-7.mjs`·`xdr-run.mjs`, `docs/`, `package/`, `xdr/fixtures/`, `test/r5`·`package-starter`·`xdr-run` 시험 | 첫 커밋 `0ff36ed` (시작 틀 R5) |
-| 학생 작업 | 판정기 규칙(`src/decider.mjs`), 탐지 규칙(`src/detect.mjs`), 자료실 API(`api/`, `src/notes-api.mjs`, `src/auth-api.mjs`), 접속 앱(`public/`), 정책 사본·복원(`policy/`, `scripts/policy-*.mjs`), 작전실·실측표(`public/ops.html`, `public/ops-checks.mjs`, `src/ops-summary.mjs`(경로 `/api/ops/summary`는 `vercel.json` rewrites로 `api/auth/session.js`가 처리 — Vercel 무료 요금제 서버 함수 12개 제한), `scripts/ops-matrix.mjs`), SQL 제안(`supabase/`), 보너스(`xdr/brute-force`, `xdr/web-injection`), 자기 점검(`src/attack-check.mjs`), 학생 시험(`test/policy-restore.test.mjs`, `test/decider-zones.test.mjs`) | 2단계~12단계 커밋 |
+| 학생 작업 | 판정기 규칙(`src/decider.mjs`), 탐지 규칙(`src/detect.mjs`), 자료실 API(`api/`, `src/notes-api.mjs`, `src/auth-api.mjs`), 접속 앱(`public/`), 정책 사본·복원(`policy/`, `scripts/policy-*.mjs`), 작전실·실측표(`public/ops.html`, `public/ops-checks.mjs`, `src/ops-summary.mjs`(경로 `/api/ops/summary`는 `vercel.json` rewrites로 `api/auth/session.js`가 처리 — Vercel 무료 요금제 서버 함수 12개 제한), `scripts/ops-matrix.mjs`), SQL 제안(`supabase/`), 보너스(`xdr/brute-force`, `xdr/web-injection`, `xdr/known-cve`), 자기 점검(`src/attack-check.mjs`), 학생 시험(`test/policy-restore.test.mjs`, `test/decider-zones.test.mjs`) | 2단계~12단계 커밋 |
 
 `npm run decider:test`·`decider:zones`·`detect:test`·`fixture:7`·`ops:matrix`의 로컬 결과는 가상 요청 연습이며 ALEPH SDP 엔진이나 심판의 판정이 아닙니다.
 
@@ -245,6 +246,19 @@
 | `result.json` | `npm run xdr:run -- web-injection` 결과 |
 
 경보 속 `doc-sql-…` 같은 값은 수업용 문서 표기(실제 공격 문자열 대신 쓰는 자리표시)이며, 판단 모듈은 실제 형태(`' OR 1=1`, `UNION SELECT`, `<script`, `../../`, `; cat` 등)도 함께 봅니다.
+
+## 보너스 xdr-03 알려진 취약점 악용 탐지 (`xdr/known-cve/`)
+
+| 파일 | 하는 일 |
+| --- | --- |
+| `read-alerts.mjs` | 확인용. 경보에서 시각·출발 주소·계정·규칙 수준·설명만 뽑음(요청 주소·머리글은 공격 문자열이 섞여 출력하지 않고, 비밀값처럼 보이는 문자열은 `[가림]`). 경보 24건 = 뽑은 줄 24줄. `decide.mjs`는 이 파일을 불러오지 않음 |
+| `patterns.json` | 근거(CVE-2021-44228, MITRE ATT&CK T1190) 패턴 5개: 머리글 안의 원격 조회 구문, 요청 인자 안의 원격 조회 구문(둘 다 `${jndi:<프로토콜>://`), 알려진 취약점 점검 도구 흔적(보조), 조회 구문 없는 단서(CVE 번호·jndi 단어·잘린 조회 형태·라이브러리 이름, 알림만), T1190 분류만 있는 경보(알림만) |
+| `decide.mjs` | 심판이 이 파일 하나만 인터넷 없이 불러 씀. **import 없음, 파일 읽기·쓰기 없음, 바깥 질문 없음.** 완전한 조회 구문이 머리글·인자에 있으면 0.88부터(양쪽·반복·점검 흔적·높은 수준이면 더해 최대 0.99) → `block`, 구문 없는 단서는 0.6~0.65 → `alert`, T1190 분류만 있으면 0.5 → `alert`, 신호 없으면 0.05 → `record`. `%24%7Bjndi…` 처럼 바꿔 적은 인자도 한 번 풀어서 봄 |
+| `respond.mjs` | `node xdr/known-cve/respond.mjs` → `block`만 `deny-rules.json`(출발 주소별, 만료 시각 = 마지막 경보 + 60분, 근거 경보 번호)으로, `block`·`alert`는 `xdr/alerts.log`에 한 줄씩(같은 경보 번호는 다시 적지 않음). 정상 이벤트에 나온 주소는 거부 규칙에서 제외. 시험 경보를 다시 흘려 막힘·통과 확인 |
+| `ztna-plugin.mjs` | 판정기에 꽂는 확인 단계: `checkSource({srcip, at})` → 거부 규칙에 걸리면 `deny`(`xdr_known_cve_block`). `src/decider.mjs`의 기존 규칙은 그대로 |
+| `result.json` | `npm run xdr:run -- known-cve` 결과: block 8 · alert 8 · record 8, 정상 이벤트 차단 0 |
+
+경보 속 주소는 문서용 대역(192.0.2.0/24, 198.51.100.0/24, 203.0.113.0/24)이고 조회 구문은 수업용 표기입니다. 이 문자열을 다른 시스템에 넣거나 변형하지 않습니다.
 
 ## 메모가 남아 있는지 검색하는 확인 절차
 
