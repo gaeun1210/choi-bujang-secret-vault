@@ -13,27 +13,33 @@
 | 5단계 | `d323be8` 「5단계 저장점」 | 로그인·로그아웃도 서버 함수로 옮겨 화면 코드에서 Supabase 주소·공개 키·SDK 제거, 메모 테이블의 PUBLIC·anon·authenticated 직접 권한 회수 SQL, `originalApiUrl` 기록 |
 | 보너스 xdr-01 | `1dba0c2` 「보너스 xdr-01 저장점」 | 무차별 로그인 공격 탐지(T1110): 경보 읽기·패턴·판단·ZTNA 거부 규칙 부품·알림 로그 |
 | 보너스 xdr-02 | `a110fd6` 「보너스 xdr-02 저장점」 | 웹 주입 공격 탐지(T1190): SQL 구문·스크립트 태그·경로 이탈 반복·명령 구분자 패턴, 판단·ZTNA 거부 규칙 부품·알림 로그 |
-| 6단계 | 「6단계 저장점」 | 판정기 `src/decider.mjs`에 기기 등록 규칙 `device_registered` 추가: 등록 기기의 읽기만 허용, 미등록·값 없음은 `deny`·`device_not_registered` |
+| 6단계 | `3069eb8` 「6단계 저장점」 | 판정기 `src/decider.mjs`에 기기 등록 규칙 `device_registered` 추가: 등록 기기의 읽기만 허용, 미등록·값 없음은 `deny`·`device_not_registered` |
+| 7단계 | 「7단계 저장점」 | 판정기 입력 검사(접속 정보는 엔진의 가상 사건 출처일 때만 신뢰) + 규칙 `step_up_required`: 새벽 시각·처음 보는 네트워크·갑작스러운 대량 읽기가 겹치면 다시 로그인 요구 |
 
-## 판정기 (6단계)
+## 판정기 (6~7단계)
 
-`src/decider.mjs`의 `decide(request)`는 반 엔진이 신원·기기·경로를 확인한 뒤 보낸 요청만 받습니다(계약: `docs/DECIDER_REQUEST.md`). 규칙 이름은 같은 파일의 `RULE_IDS`에 있습니다.
+`src/decider.mjs`의 `decide(request)`는 반 엔진이 신원·기기·경로를 확인한 뒤 보낸 요청만 받습니다(계약: `docs/DECIDER_REQUEST.md`). 규칙 이름은 같은 파일의 `RULE_IDS`에 있습니다. 위에서부터 차례로 봅니다.
 
-| 규칙 | 조건 | 결과 |
-| --- | --- | --- |
-| `device_registered` | `request.deviceRegistered`가 정확히 `true`가 아니면(미등록 `false`, 값 없음 등) | `deny` · `device_not_registered` |
-| `device_registered` | 등록 기기이고 읽기 동작(`GET`·`HEAD`) | `allow` · `approved` |
-| `starter.deny` | 그 밖의 요청 | `deny` · `starter_not_ready` (시작 틀 기본 거부 그대로) |
+| 순서 | 규칙 | 조건 | 결과 |
+| --- | --- | --- | --- |
+| 1 | `device_registered` | `deviceRegistered`가 정확히 `true`가 아님(미등록·값 없음) | `deny` · `device_not_registered` |
+| 2 | `step_up_required` | 등록 기기의 읽기인데, 믿을 수 있는 가상 사건에서 **새벽 0~5시 + 처음 보는 네트워크 + 최근 10분 사건 수 합 10 이상**이 모두 겹침, 그리고 5분 안의 새 로그인 확인이 없음 | `step_up` · `step_up_required` (자료 없음, 다시 로그인 요구) |
+| 3 | `device_registered` (+`step_up_required`) | 등록 기기의 읽기(`GET`·`HEAD`), 또는 2번 상황에서 엔진이 새 로그인(`stepUp.verified=true`, `authAgeSeconds` 300초 이하)을 확인해 다시 보낸 요청 | `allow` · `approved` |
+| 4 | `starter.deny` | 그 밖의 요청 | `deny` · `starter_not_ready` |
 
-판단에는 요청에 담긴 기기 등록 여부와 동작만 씁니다. 브라우저가 보낸 사용자 번호·역할·기기 상태는 쓰지 않고, 인증서·CA·서명 키는 만들거나 저장소에 넣지 않습니다. 이번 과정에는 따로 설치할 접속 프로그램이 없습니다.
+### 입력 검사 (7단계)
+
+- **접속 정보 출처 구분:** `signals`는 계약 모양(`source·region·network·hour` 네 칸만)이 정확하고 `source`가 엔진의 가상 사건 표시 `judge_fixture`일 때만 믿습니다. 실제 경로의 `source: "none"`, 값 없음, 칸이 더 붙은 값, 다른 출처(브라우저 헤더를 흉내 낸 값 등)는 **믿지 않고, 정상값으로 채우지도 않습니다.** 믿을 수 없으면 7단계 규칙을 적용하지 않고 6단계 규칙만 봅니다.
+- **최근 사건:** `recentEvents`는 최대 12건, 각 `{kind, ageSeconds, count}` 모양만 씁니다. 모양이 틀린 항목은 버립니다.
+- **다시 로그인 확인:** `stepUp`은 `verified`가 정확히 `true`이고 나이가 0~900초(계약) 안이면서 300초 이하일 때만 유효합니다. `verified` 하나만 보고 건너뛰지 않습니다. 토큰 원문은 판정기에 오지도 않고 기록하지도 않습니다.
+- **지역은 판단에 쓰지 않습니다.** 지역 하나만으로 막지 않고, 이상 신호가 겹쳐도 영구 차단이 아니라 다시 로그인만 요구합니다. 사유는 `unusualAccessReasons(request)`가 `off_hours`·`new_network`·`burst_read`로 돌려줍니다.
 
 ### 확인 순서 (로컬 연습)
 
-1. 저장소 루트에서 `npm run decider:test`를 실행합니다.
-2. 출력에 `통과 · 등록 기기의 정상 요청`(→ `allow`)이 보이는지 확인합니다.
-3. 출력에 `통과 · 미등록 기기의 가상 요청`(→ `deny`·`device_not_registered`)이 보이는지 확인합니다.
-4. 이 명령은 가상 요청 연습이며 심판 판정이 아닙니다. 실제 미등록 기기 공격은 심판이 반 엔진으로 보내 확인합니다.
-5. 기존 자료실 화면(`/`)과 `/api/notes…` 서버 함수는 6단계에서 바뀌지 않았습니다. 로그인 후 메모가 보이는지 화면에서 확인합니다.
+1. `npm run decider:test` → `통과 · 등록 기기의 정상 요청`, `통과 · 미등록 기기의 가상 요청`, `통과 · 복합 이상 접속`(→ `step_up`), `통과 · 다시 확인한 복합 이상 접속`(→ `allow`)
+2. `npm run fixture:7` → `정상 사건: allow`, `복합 이상 사건: step_up`
+3. 이 명령들은 가상 요청 연습이며 심판 판정이 아닙니다. 다시 로그인 전 자료 차단과 새 요청 허용의 실측은 재로그인 계약(`stepUp`)을 검증하는 반 엔진이 있는 환경에서 심판이 합니다(이 저장소의 자기 점검에는 미실행으로 기록).
+4. 이번 과정에는 따로 설치할 접속 프로그램이 없습니다. 인증서·CA·키는 만들지 않았고, 자료실 화면(`/`)과 `/api/notes…`는 바뀌지 않았습니다.
 
 ## 현재 작동하는 기능 (5단계)
 

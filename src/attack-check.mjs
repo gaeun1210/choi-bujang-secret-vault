@@ -182,6 +182,12 @@ async function stepThreeChecks(config) {
     results.push({ attackId: 'unregistered_device_read', expected: '미등록 기기 요청은 판정기가 deny·device_not_registered',
       observed: '미실행: 미등록 기기 공격은 심판이 반 엔진으로 보냄 (로컬 연습은 npm run decider:test)' });
   }
+  if (config.step >= 7) {
+    results.push({ attackId: 'unusual_access_before_relogin', expected: '복합 이상 접속은 다시 로그인 전 step_up·자료 없음',
+      observed: '미실행: 재로그인 계약(stepUp)을 검증하는 반 엔진이 이 배포 앞에 없음 (로컬 연습은 npm run fixture:7)' });
+    results.push({ attackId: 'unusual_access_after_relogin', expected: '새 로그인(5분 안) 뒤 다시 보낸 요청은 allow',
+      observed: '미실행: 실제 재로그인은 반 엔진이 새 로그인 시각을 검증할 때만 심판이 시험' });
+  }
 
   // 로그인이 필요한 점검은 비밀번호를 코드에 넣지 않기 위해 자동으로 보내지 않습니다.
   results.push({ attackId: 'login_a_crud', expected: '정상 A 로그인 뒤 자기 가상 메모 추가·수정·삭제 성공',
@@ -201,6 +207,6 @@ async function stepThreeChecks(config) {
 export async function runAttackChecks(config) {
   if (config.step === 1) return stepOneChecks(config);
   if (config.step === 2) return stepTwoChecks(config);
-  if (config.step >= 3 && config.step <= 6) return stepThreeChecks(config);
+  if (config.step >= 3 && config.step <= 7) return stepThreeChecks(config);
   throw new Error('이 단계의 공격 점검을 src/attack-check.mjs에 구현해 주세요.');
 }
