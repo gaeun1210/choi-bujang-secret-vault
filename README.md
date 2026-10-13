@@ -58,6 +58,7 @@
 | 강사 공지 `notices` | `notice:<UUID>` (`vault_notices.notice_id`) | `/api/notices`, `/api/notices/:id` (새로 추가, 화면 메뉴는 그대로) | 로그인한 사용자 누구나 | DB `vault_staff`에 `instructor`로 저장된 사용자만, 그 밖에는 `403 INSTRUCTOR_ONLY` |
 
 - **직접 API 요청도 같은 검사:** 화면 메뉴를 거치지 않고 API를 불러도 서버가 토큰으로 확인한 사용자 ID와 DB의 `owner_id`·`vault_staff`를 다시 대조합니다. 남의 메모·없는 메모는 같은 `404`로 거부해 존재 여부를 알리지 않고, 공지 경로에 메모 ID를 넣는 식으로 구역을 섞어도 `404`입니다.
+- **심판 토큰의 주인 구별:** 틀의 `verify-login.mjs`는 심판 토큰에 대해 `userId`(sub)와 함께 `identity`(`a`·`b`)를 돌려줍니다. A·B가 같은 sub를 쓸 수 있으므로, 심판 토큰이면 sub와 identity를 함께 묶은 고정 UUID(`ownerKey`)를 메모 주인 키로 씁니다. 학생 로그인은 Supabase 사용자 ID 그대로입니다.
 - **본문의 role은 믿지 않음:** `role`, `isInstructor` 같은 값이 와도 권한 판단에 쓰지 않고 `body_role_ignored`로 기록만 합니다.
 - **거부 사유:** 서버 기록에 `deny <사유> resource=<구역:ID> user=<앞 8자리>` 한 줄(`not_owner_or_missing`, `owner_change`, `instructor_only`, `invalid_resource_id`, `body_role_ignored`). 토큰·본문·이메일은 남기지 않습니다.
 - **DB 준비 (8단계, 검토 후 한 번):** `supabase/step8-zones.sql`의 [가] → [나]를 Run. 공지 1건이 들어가고, 두 테이블 모두 RLS 켬·anon·authenticated 권한 없음이면 정상입니다. 강사 지정은 선택(주석 처리된 SQL)이며, 지정하지 않으면 모든 학생의 공지 수정이 거부됩니다.

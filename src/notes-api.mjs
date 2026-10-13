@@ -4,7 +4,7 @@
 // 4단계: 읽기·추가·수정·삭제 모두 "확인된 사용자 ID = DB의 owner_id"인 행만 다룹니다.
 // 남의 메모는 존재 여부도 알리지 않도록 '없음(404)'과 똑같이 거부합니다.
 import { readFileSync } from 'node:fs';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { createLoginVerifier } from './verify-login.mjs';
 
 export const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu;
@@ -44,7 +44,18 @@ export async function requireUser(request, response) {
     send(response, 401, { error: 'LOGIN_REQUIRED', message: '로그인이 필요합니다. 토큰이 없거나 확인되지 않았습니다.' });
     return null;
   }
-  return login.userId.toLowerCase();
+  return ownerKey(login);
+}
+
+// 메모 주인 키: 학생 로그인은 Supabase 사용자 ID 그대로.
+// 심판 토큰은 같은 sub 안에서 A·B를 identity('a'·'b')로 구별하므로, sub와 identity를 함께 묶은
+// 고정 UUID를 주인 키로 씁니다. 그래서 심판 B가 심판 A의 메모를 자기 것으로 볼 수 없습니다.
+export function ownerKey(login) {
+  const sub = String(login.userId).toLowerCase();
+  if (login.kind !== 'judge') return sub;
+  const digest = createHash('sha256').update(`aleph-judge-owner:${sub}:${login.identity}`).digest('hex');
+  const variant = ((Number.parseInt(digest[16], 16) & 0x3) | 0x8).toString(16);
+  return `${digest.slice(0, 8)}-${digest.slice(8, 12)}-5${digest.slice(13, 16)}-${variant}${digest.slice(17, 20)}-${digest.slice(20, 32)}`;
 }
 
 export function readBody(request) {
