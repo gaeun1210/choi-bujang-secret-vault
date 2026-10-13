@@ -1,0 +1,12 @@
+{
+  "schema": "aleph.policy-backup.v1",
+  "version": "safe-v9",
+  "file": "safety-policy.safe-v9.json",
+  "sha256": "9dd5dc2c40b3d4ab4718804987d09afbaefc105a081efba28775abecf3eaa675",
+  "verifiedAt": "2026-10-13",
+  "verifiedWith": [
+    "npm run decider:test 4항목 통과",
+    "npm run fixture:7 정상 allow·복합 이상 step_up",
+    "8단계 심판 100점 커밋 885f310의 구역 규칙"
+  ]
+}

@@ -182,6 +182,18 @@ async function stepThreeChecks(config) {
     results.push({ attackId: 'unregistered_device_read', expected: '미등록 기기 요청은 판정기가 deny·device_not_registered',
       observed: '미실행: 미등록 기기 공격은 심판이 반 엔진으로 보냄 (로컬 연습은 npm run decider:test)' });
   }
+  if (config.step >= 10) {
+    let anonymousRestore = null;
+    try {
+      const response = await fetch(new URL('/api/restore/00000000-0000-4000-8000-000000000000', app), {
+        method: 'POST', redirect: 'error', signal: AbortSignal.timeout(10000) });
+      anonymousRestore = response.headers.has('x-vercel-id') ? response : null;
+    } catch { /* 미실행 */ }
+    results.push({ attackId: 'anonymous_note_restore', expected: '로그인 없이 복원 요청 시 401 JSON',
+      observed: await denial(anonymousRestore)() });
+    results.push({ attackId: 'restore_b_note_hash_match', expected: 'B 메모 한 건 복원 뒤 ID·소유자·내용 해시가 사본과 같음, A는 B 메모 복원 거부',
+      observed: '미실행: 비밀번호를 코드에 넣지 않으므로 학생이 B 계정으로 직접 확인' });
+  }
   if (config.step >= 9) {
     results.push({ attackId: 'doppelganger_burst_revocation', expected: '복합 의심 사건만 propose_revocation(대상 기기·이유), 정상 기기 유지',
       observed: '미실행: 실제 회수와 경과 시간은 심판이 반 엔진으로 가상 사건을 보내 확인 (로컬 연습은 npm run detect:test)' });
@@ -218,6 +230,6 @@ async function stepThreeChecks(config) {
 export async function runAttackChecks(config) {
   if (config.step === 1) return stepOneChecks(config);
   if (config.step === 2) return stepTwoChecks(config);
-  if (config.step >= 3 && config.step <= 9) return stepThreeChecks(config);
+  if (config.step >= 3 && config.step <= 10) return stepThreeChecks(config);
   throw new Error('이 단계의 공격 점검을 src/attack-check.mjs에 구현해 주세요.');
 }

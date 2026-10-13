@@ -122,10 +122,59 @@ async function db(path, { method = 'GET', body, prefer, table = 'vault_notes' } 
     console.error(`notes: 자료 저장소 응답 실패 (${method} HTTP ${upstream.status})`);
     throw Object.assign(new Error('upstream'), { status: upstream.status });
   }
-  return upstream.status === 204 ? [] : upstream.json();
+  if (upstream.status === 204) return [];
+  const text = await upstream.text();
+  return text ? JSON.parse(text) : [];
 }
 
 const SELECT = 'select=note_id,owner_id,title,content';
+
+// ── 10단계: 비공개 메모 사본과 감사 기록 ─────────────────────────
+// 내용 해시 = sha256(제목 + 줄바꿈 + 내용) 16진수. supabase/step10-backup.sql 의 계산과 같습니다.
+export const contentHash = (title, body) => createHash('sha256').update(`${title}\n${body}`, 'utf8').digest('hex');
+
+// 감사 기록은 덧붙이기만 합니다. 토큰·내용은 남기지 않고 사용자 키는 앞 8자리만.
+export async function audit(action, resource, actor, detail = {}) {
+  try {
+    await db('', { table: 'vault_audit', method: 'POST', body: {
+      action, resource, actor: String(actor ?? '-').slice(0, 8), detail } });
+  } catch {
+    console.error(`audit: 감사 기록을 남기지 못했습니다 (${action})`);
+  }
+}
+
+export const backups = {
+  // 메모를 만들 때 사본 한 건을 남기고, 돌려받은 행의 해시로 바로 검증합니다.
+  async snapshotOnCreate(id, ownerId, note) {
+    const hash = contentHash(note.title, note.body);
+    const rows = await db('?select=note_id,owner_id,content_hash', { table: 'vault_notes_backup', method: 'POST',
+      prefer: 'return=representation',
+      body: { note_id: id, owner_id: ownerId, title: note.title, content: note.body, content_hash: hash, source: 'create' } });
+    if (rows[0]?.content_hash !== hash || rows[0]?.owner_id !== ownerId) throw new Error('backup_verify');
+    return hash;
+  },
+  // 침해 전 사본: 그 메모의 가장 이른 사본(만들 때 또는 seed)
+  async earliest(id) {
+    const rows = await db(`?select=note_id,owner_id,title,content,content_hash,source,created_at&note_id=eq.${id}&order=id.asc&limit=1`,
+      { table: 'vault_notes_backup' });
+    return rows[0] ?? null;
+  },
+};
+
+// 복원용: 주인 조건 없이 그 ID의 현재 행을 확인(다른 사람 행이면 복원하지 않기 위해)
+export async function currentNoteRow(id) {
+  const rows = await db(`?${'select=note_id,owner_id,title,content'}&note_id=eq.${id}&limit=1`);
+  return rows[0] ?? null;
+}
+
+export async function restoreNoteRow(id, ownerId, snapshot, exists) {
+  if (exists) {
+    return db(`?note_id=eq.${id}&owner_id=eq.${ownerId}&select=note_id,owner_id,title,content`, {
+      method: 'PATCH', prefer: 'return=representation', body: { title: snapshot.title, content: snapshot.content } });
+  }
+  return db('?select=note_id,owner_id,title,content', { method: 'POST', prefer: 'return=representation',
+    body: { note_id: id, owner_id: ownerId, title: snapshot.title, content: snapshot.content } });
+}
 
 // ── 8단계: 자원 ID와 구역 ─────────────────────────────────────
 // 메모와 강사 공지는 서로 다른 구역·자원 ID를 씁니다. 서버는 요청 경로로 구역을 정하고
@@ -160,6 +209,12 @@ export const notes = {
       body: { note_id: id, owner_id: userId, title: note.title, content: note.body },
     });
     if (rows[0]?.owner_id !== userId) throw Object.assign(new Error('owner'), { status: 502 });
+    // 10단계: 만들 때의 내용을 비공개 사본으로 남깁니다(사본 실패가 메모 저장을 막지는 않음, 기록만).
+    try {
+      await backups.snapshotOnCreate(rows[0].note_id, userId, note);
+    } catch {
+      console.error(`backup: 사본을 남기지 못했습니다 resource=note:${rows[0].note_id}`);
+    }
     return toNote(rows[0]);
   },
   // 기존 행: owner_id=본인 조건으로만 찾음. 새 행: owner_id는 바꾸지 않으므로 그대로 본인.

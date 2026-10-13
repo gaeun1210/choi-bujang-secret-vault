@@ -1,0 +1,96 @@
+{
+  "version": "safe-v9",
+  "zoneRoutes": [
+    {
+      "method": "GET",
+      "shape": "/notes/:id",
+      "zone": "own_notes",
+      "rule": "zone_own_notes",
+      "services": [
+        "notes"
+      ]
+    },
+    {
+      "method": "PUT",
+      "shape": "/notes/:id",
+      "zone": "own_notes",
+      "rule": "zone_own_notes",
+      "services": [
+        "notes"
+      ]
+    },
+    {
+      "method": "GET",
+      "shape": "/notices",
+      "zone": "notices",
+      "rule": "zone_notices_read",
+      "services": [
+        "notes",
+        "notices"
+      ]
+    },
+    {
+      "method": "GET",
+      "shape": "/notices/:id",
+      "zone": "notices",
+      "rule": "zone_notices_read",
+      "services": [
+        "notes",
+        "notices"
+      ]
+    },
+    {
+      "method": "PUT",
+      "shape": "/notices/:id",
+      "zone": "notices",
+      "rule": "zone_notice_instructor_only",
+      "instructorOnly": true,
+      "services": [
+        "notes",
+        "notices"
+      ]
+    }
+  ],
+  "featureWords": [
+    "export",
+    "import",
+    "download",
+    "backup",
+    "bulk",
+    "all",
+    "admin",
+    "search",
+    "dump",
+    "sync",
+    "list",
+    "lists",
+    "index",
+    "everyone",
+    "everything",
+    "users",
+    "others",
+    "shared",
+    "public",
+    "feed",
+    "batch",
+    "query"
+  ],
+  "ownerChecks": {
+    "denyOtherSubjectIds": true,
+    "rememberFirstOwner": true,
+    "noticeIdsUseNoticeZone": true
+  },
+  "stepUp": {
+    "offHoursFrom": 0,
+    "offHoursTo": 6,
+    "newNetworks": [
+      "unusual",
+      "new",
+      "first_seen"
+    ],
+    "burstWindowSeconds": 600,
+    "burstMinCount": 10,
+    "freshLoginSeconds": 300
+  },
+  "denyReasonCode": "route_not_allowed"
+}

@@ -7,19 +7,38 @@ export const RULE_IDS = Object.freeze(['starter.deny', 'device_registered', 'ste
 
 const READ_METHODS = new Set(['GET', 'HEAD']);
 
+// ── 안전 정책 (10단계) ─────────────────────────────────────
+// 아래 SAFETY-POLICY 블록은 판정기의 "시험 정책"입니다. 침해 전에 검증한 사본은
+// policy/backup/ 에 있고, npm run policy:diff 로 차이를 보고 npm run policy:restore 로 이 블록만 되돌립니다.
+// 블록 안은 JSON 그대로 둡니다(도구가 읽고 씁니다). 블록 밖의 코드는 도구가 건드리지 않습니다.
+// SAFETY-POLICY:BEGIN
+const SAFETY_POLICY = {
+  "version": "safe-v9",
+  "zoneRoutes": [
+    { "method": "GET", "shape": "/notes/:id", "zone": "own_notes", "rule": "zone_own_notes", "services": ["notes"] },
+    { "method": "PUT", "shape": "/notes/:id", "zone": "own_notes", "rule": "zone_own_notes", "services": ["notes"] },
+    { "method": "GET", "shape": "/notices", "zone": "notices", "rule": "zone_notices_read", "services": ["notes", "notices"] },
+    { "method": "GET", "shape": "/notices/:id", "zone": "notices", "rule": "zone_notices_read", "services": ["notes", "notices"] },
+    { "method": "PUT", "shape": "/notices/:id", "zone": "notices", "rule": "zone_notice_instructor_only", "instructorOnly": true, "services": ["notes", "notices"] }
+  ],
+  "featureWords": ["export", "import", "download", "backup", "bulk", "all", "admin", "search", "dump", "sync",
+    "list", "lists", "index", "everyone", "everything", "users", "others", "shared", "public", "feed", "batch", "query"],
+  "ownerChecks": { "denyOtherSubjectIds": true, "rememberFirstOwner": true, "noticeIdsUseNoticeZone": true },
+  "stepUp": { "offHoursFrom": 0, "offHoursTo": 6, "newNetworks": ["unusual", "new", "first_seen"],
+    "burstWindowSeconds": 600, "burstMinCount": 10, "freshLoginSeconds": 300 },
+  "denyReasonCode": "route_not_allowed"
+};
+// SAFETY-POLICY:END
+
+export const POLICY_VERSION = SAFETY_POLICY.version;
+const DENY_REASON = SAFETY_POLICY.denyReasonCode;
+
 // ── 8단계 구역 표: 엔진이 확인한 메서드 + 정확한 경로 모양만 허용합니다. 표에 없는 경로는 거부. ──
 // 경로는 자료 ID 하나만 고르고(쿼리로 기능을 고르지 않음), :id와 같은 깊이에 기능 경로를 두지 않습니다.
 // services: 그 경로를 받을 수 있는, 엔진이 확인한 서비스 이름. 다른 서비스의 같은 모양 경로는 다른 구역입니다.
 // 메모 목록(GET /notes)은 두지 않습니다: 판정기는 메모 주인을 모르므로 목록 경로는 여러 사람의 메모를
 // 한꺼번에 여는 길이 됩니다. 메모는 자료 ID 한 건씩만 엽니다.
-const ZONE_ROUTES = Object.freeze([
-  { method: 'GET', shape: '/notes/:id', zone: 'own_notes', rule: 'zone_own_notes', services: ['notes'] },
-  { method: 'PUT', shape: '/notes/:id', zone: 'own_notes', rule: 'zone_own_notes', services: ['notes'] },
-  { method: 'GET', shape: '/notices', zone: 'notices', rule: 'zone_notices_read', services: ['notes', 'notices'] },
-  { method: 'GET', shape: '/notices/:id', zone: 'notices', rule: 'zone_notices_read', services: ['notes', 'notices'] },
-  { method: 'PUT', shape: '/notices/:id', zone: 'notices', rule: 'zone_notice_instructor_only', instructorOnly: true,
-    services: ['notes', 'notices'] },
-].map(Object.freeze));
+const ZONE_ROUTES = Object.freeze(SAFETY_POLICY.zoneRoutes.map(entry => Object.freeze({ ...entry })));
 
 // 자원 ID 종류: 강사 공지 자원은 ID 어디에든 notice·announce·bulletin·공지 표시가 있습니다(예: notice-1, class-notice).
 // 메모는 note… 로 시작합니다. 메모 경로에 공지 ID가 오거나 공지 경로에 메모 ID가 오면 다른 구역 자원을 고른 것입니다.
@@ -52,8 +71,8 @@ function otherSubjectId(id, subjectId) {
 }
 const RESOURCE_ID = /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/u;
 // 자료 ID 자리에 기능 이름이 오면 자료가 아니라 기능을 고르는 것이므로 거부합니다.
-const FEATURE_WORDS = new Set(['export', 'import', 'download', 'backup', 'bulk', 'all', 'admin', 'search', 'dump', 'sync',
-  'list', 'lists', 'index', 'everyone', 'everything', 'users', 'others', 'shared', 'public', 'feed', 'batch', 'query']);
+const FEATURE_WORDS = new Set(SAFETY_POLICY.featureWords);
+const OWNER_CHECKS = SAFETY_POLICY.ownerChecks;
 
 // 요청 경로가 구역 표의 한 줄과 정확히 맞으면 그 줄(과 :id 값)을, 아니면 null.
 export function matchZoneRoute(request) {
@@ -83,13 +102,13 @@ const resourceOwners = new Map();
 const ownerKeyOf = (request, zone) => `${request.service}|${zone.zone}|${String(zone.id).toLowerCase()}`;
 
 export function rememberedOwnerConflict(request, zone) {
-  if (zone.zone !== 'own_notes' || !zone.id) return false;
+  if (!OWNER_CHECKS.rememberFirstOwner || zone.zone !== 'own_notes' || !zone.id) return false;
   const owner = resourceOwners.get(ownerKeyOf(request, zone));
   return owner !== undefined && owner !== request.subjectId;
 }
 
 function rememberOwner(request, zone) {
-  if (zone.zone !== 'own_notes' || !zone.id) return;
+  if (!OWNER_CHECKS.rememberFirstOwner || zone.zone !== 'own_notes' || !zone.id) return;
   const key = ownerKeyOf(request, zone);
   if (resourceOwners.has(key)) return;
   if (resourceOwners.size >= OWNER_MEMORY_LIMIT) resourceOwners.delete(resourceOwners.keys().next().value);
@@ -100,13 +119,15 @@ function rememberOwner(request, zone) {
 // 반환: { allow: boolean, rule }
 export function zoneVerdict(request, zone) {
   if (zone.zone === 'own_notes' && zone.id) {
-    if (NOTICE_ID.test(zone.id)) {
+    if (OWNER_CHECKS.noticeIdsUseNoticeZone && NOTICE_ID.test(zone.id)) {
       // 메모 경로로 공지 자원을 고름 → 공지 구역 규칙(읽기만, 수정은 강사만)
       return READ_METHODS.has(request.method)
         ? { allow: true, rule: 'zone_notices_read' }
         : { allow: false, rule: 'zone_notice_instructor_only' };
     }
-    if (otherSubjectId(zone.id, request.subjectId)) return { allow: false, rule: 'zone_own_notes' };
+    if (OWNER_CHECKS.denyOtherSubjectIds && otherSubjectId(zone.id, request.subjectId)) {
+      return { allow: false, rule: 'zone_own_notes' };
+    }
   }
   if (zone.zone === 'notices' && zone.id && NOTE_ID.test(zone.id)) {
     return { allow: false, rule: 'zone_own_notes' };   // 공지 경로로 메모 자원을 고름
@@ -118,11 +139,12 @@ export function zoneVerdict(request, zone) {
 // 7단계 step_up_required 기준 (가상 접속 사건 전용)
 const TRUSTED_SIGNAL_SOURCE = 'judge_fixture';     // 엔진이 검증해 넘긴 가상 사건 표시
 const KNOWN_SIGNAL_SOURCES = new Set(['none', TRUSTED_SIGNAL_SOURCE]);
-const OFF_HOURS = hour => hour >= 0 && hour < 6;   // 평소와 다른 시각: 새벽 0~5시
-const NEW_NETWORKS = new Set(['unusual', 'new', 'first_seen']);
-const BURST_WINDOW_SECONDS = 600;                  // 최근 10분 안의 사건만
-const BURST_MIN_COUNT = 10;                        // 갑자기 많은 자료 읽기: 사건 수 합 10 이상
-const FRESH_LOGIN_SECONDS = 300;                   // 다시 로그인한 지 5분 안이어야 통과
+const STEP_UP = SAFETY_POLICY.stepUp;
+const OFF_HOURS = hour => hour >= STEP_UP.offHoursFrom && hour < STEP_UP.offHoursTo;   // 평소와 다른 시각: 새벽 0~5시
+const NEW_NETWORKS = new Set(STEP_UP.newNetworks);
+const BURST_WINDOW_SECONDS = STEP_UP.burstWindowSeconds;   // 최근 10분 안의 사건만
+const BURST_MIN_COUNT = STEP_UP.burstMinCount;             // 갑자기 많은 자료 읽기: 사건 수 합 10 이상
+const FRESH_LOGIN_SECONDS = STEP_UP.freshLoginSeconds;     // 다시 로그인한 지 5분 안이어야 통과
 
 const respond = (request, decision, reasonCode, ruleIds) => ({
   schema: 'aleph.decision.v1',
@@ -196,21 +218,21 @@ export async function decide(request) {
 
   // 8단계 zone_route_allowlist: 구역 표에 없는 메서드·경로(알 수 없는 경로, 쿼리, 기능 경로)는 거부
   const zone = matchZoneRoute(request);
-  if (!zone) return respond(request, 'deny', 'route_not_allowed', ['zone_route_allowlist']);
+  if (!zone) return respond(request, 'deny', DENY_REASON, ['zone_route_allowlist']);
 
   // 엔진이 확인한 사용자(가명 subjectId)가 없으면 어느 구역도 열지 않습니다.
   if (typeof request.subjectId !== 'string' || !request.subjectId) {
-    return respond(request, 'deny', 'route_not_allowed', [zone.rule]);
+    return respond(request, 'deny', DENY_REASON, [zone.rule]);
   }
 
   // 8단계 구역 규칙: 다른 사용자의 자원·다른 구역 자원·공지 수정은 거부.
   // 공지 수정은 강사만인데, 현재 계약에는 엔진이 확인한 강사 역할이 없으므로 브라우저 값으로 채우지 않고 모두 거부합니다
   // (최종 자료 API도 DB의 강사 권한을 다시 확인).
   const verdict = zoneVerdict(request, zone);
-  if (!verdict.allow) return respond(request, 'deny', 'route_not_allowed', [verdict.rule]);
+  if (!verdict.allow) return respond(request, 'deny', DENY_REASON, [verdict.rule]);
   // 다른 사용자가 먼저 주인으로 기억된 메모면 거부
   if (verdict.rule === 'zone_own_notes' && rememberedOwnerConflict(request, zone)) {
-    return respond(request, 'deny', 'route_not_allowed', ['zone_own_notes']);
+    return respond(request, 'deny', DENY_REASON, ['zone_own_notes']);
   }
 
   const rules = ['device_registered', verdict.rule];

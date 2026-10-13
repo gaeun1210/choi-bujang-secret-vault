@@ -29,6 +29,9 @@ export function deploymentIdentity(env, config) {
   if (typeof config.originalApiUrl === 'string' && /^https:\/\/[^\s?#]+$/u.test(config.originalApiUrl)) {
     extra.originalApiUrl = config.originalApiUrl;
   }
+  if (typeof config.restoreRoute === 'string' && /^POST \/[A-Za-z0-9/_:.-]{1,200}$/u.test(config.restoreRoute)) {
+    extra.restoreRoute = config.restoreRoute;
+  }
   return {
     schema: 'aleph.defense.deployment.v1',
     step: config.step,
