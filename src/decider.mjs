@@ -73,6 +73,27 @@ export function matchZoneRoute(request) {
   return null;
 }
 
+// 8단계 자원 주인 기억: 판정기 요청에는 메모 주인 칸이 없으므로, 자기 메모 구역의 자료 ID를
+// 처음 허용받은 사용자(엔진이 확인한 subjectId)를 그 자료의 주인으로 기억합니다.
+// 같은 자료 ID를 다른 사용자가 요청하면 다른 사용자의 메모로 보고 거부합니다(같은 판정기 실행 안에서만 유지).
+const OWNER_MEMORY_LIMIT = 5000;
+const resourceOwners = new Map();
+const ownerKeyOf = (request, zone) => `${request.service}|${zone.zone}|${String(zone.id).toLowerCase()}`;
+
+export function rememberedOwnerConflict(request, zone) {
+  if (zone.zone !== 'own_notes' || !zone.id) return false;
+  const owner = resourceOwners.get(ownerKeyOf(request, zone));
+  return owner !== undefined && owner !== request.subjectId;
+}
+
+function rememberOwner(request, zone) {
+  if (zone.zone !== 'own_notes' || !zone.id) return;
+  const key = ownerKeyOf(request, zone);
+  if (resourceOwners.has(key)) return;
+  if (resourceOwners.size >= OWNER_MEMORY_LIMIT) resourceOwners.delete(resourceOwners.keys().next().value);
+  resourceOwners.set(key, request.subjectId);
+}
+
 // 8단계 구역 판단: 경로·서비스는 맞아도 자원이 다른 구역이면 그 구역의 규칙으로 바꿔 판단합니다.
 // 반환: { allow: boolean, rule }
 export function zoneVerdict(request, zone) {
@@ -185,6 +206,10 @@ export async function decide(request) {
   // (최종 자료 API도 DB의 강사 권한을 다시 확인).
   const verdict = zoneVerdict(request, zone);
   if (!verdict.allow) return respond(request, 'deny', 'zone_not_allowed', [verdict.rule]);
+  // 다른 사용자가 먼저 주인으로 기억된 메모면 거부
+  if (verdict.rule === 'zone_own_notes' && rememberedOwnerConflict(request, zone)) {
+    return respond(request, 'deny', 'zone_not_allowed', ['zone_own_notes']);
+  }
 
   const rules = ['device_registered', verdict.rule];
   // 읽기에는 7단계 step_up_required를 그대로 적용합니다.
@@ -196,5 +221,6 @@ export async function decide(request) {
   }
   // 자기 메모 읽기·수정, 공지 읽기 허용. 메모의 실제 주인 확인은 자료 API가 확인된 사용자 ID와
   // DB owner_id로 다시 합니다(판정기의 subjectId는 가명이라 owner_id와 직접 비교하지 않음).
+  if (verdict.rule === 'zone_own_notes') rememberOwner(request, zone);
   return respond(request, 'allow', 'approved', rules);
 }
