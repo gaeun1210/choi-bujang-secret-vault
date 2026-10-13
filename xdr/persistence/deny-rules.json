@@ -1,0 +1,78 @@
+{
+  "schema": "aleph.xdr.deny-rules.v1",
+  "moduleKey": "persistence",
+  "blockMinutes": 60,
+  "rules": [
+    {
+      "ruleId": "xdr_persistence_isolate",
+      "srcip": "203.0.113.12",
+      "createdAt": "2026-09-27T00:18:04.000Z",
+      "expiresAt": "2026-09-27T01:19:12.000Z",
+      "evidenceAlertIds": [
+        "ps-01",
+        "ps-02"
+      ],
+      "reason": "서명 없는 새 서비스 등록 + 임시·시작 폴더 실행 파일을 가리키는 등록 (T1543) / 낯선 예약 작업 + 임시·시작 폴더 실행 파일을 가리키는 등록 (T1053)"
+    },
+    {
+      "ruleId": "xdr_persistence_isolate",
+      "srcip": "198.51.100.12",
+      "createdAt": "2026-09-27T01:06:28.000Z",
+      "expiresAt": "2026-09-27T02:06:28.000Z",
+      "evidenceAlertIds": [
+        "ps-03"
+      ],
+      "reason": "임시·시작 폴더 실행 파일을 가리키는 등록 + 다시 켜도 남도록 등록된 목록 밖 항목 (T1543)"
+    },
+    {
+      "ruleId": "xdr_persistence_isolate",
+      "srcip": "192.0.2.12",
+      "createdAt": "2026-09-27T01:22:03.000Z",
+      "expiresAt": "2026-09-27T02:22:03.000Z",
+      "evidenceAlertIds": [
+        "ps-04"
+      ],
+      "reason": "서명 없는 새 서비스 등록 (T1543)"
+    },
+    {
+      "ruleId": "xdr_persistence_isolate",
+      "srcip": "203.0.113.19",
+      "createdAt": "2026-09-27T02:09:17.000Z",
+      "expiresAt": "2026-09-27T03:09:17.000Z",
+      "evidenceAlertIds": [
+        "ps-05"
+      ],
+      "reason": "낯선 예약 작업 + 임시·시작 폴더 실행 파일을 가리키는 등록 (T1053)"
+    },
+    {
+      "ruleId": "xdr_persistence_isolate",
+      "srcip": "198.51.100.19",
+      "createdAt": "2026-09-27T04:07:45.000Z",
+      "expiresAt": "2026-09-27T05:07:45.000Z",
+      "evidenceAlertIds": [
+        "ps-06"
+      ],
+      "reason": "서명 없는 새 서비스 등록 + 임시·시작 폴더 실행 파일을 가리키는 등록 (T1543)"
+    },
+    {
+      "ruleId": "xdr_persistence_isolate",
+      "srcip": "192.0.2.19",
+      "createdAt": "2026-09-27T05:14:08.000Z",
+      "expiresAt": "2026-09-27T06:14:08.000Z",
+      "evidenceAlertIds": [
+        "ps-07"
+      ],
+      "reason": "임시·시작 폴더 실행 파일을 가리키는 등록 + 다시 켜도 남도록 등록된 목록 밖 항목 (T1543·T1053)"
+    },
+    {
+      "ruleId": "xdr_persistence_isolate",
+      "srcip": "203.0.113.33",
+      "createdAt": "2026-09-27T06:28:31.000Z",
+      "expiresAt": "2026-09-27T07:28:31.000Z",
+      "evidenceAlertIds": [
+        "ps-08"
+      ],
+      "reason": "임시·시작 폴더 실행 파일을 가리키는 등록 + 다시 켜도 남도록 등록된 목록 밖 항목 (T1543)"
+    }
+  ]
+}
